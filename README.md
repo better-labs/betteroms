@@ -1,2 +1,53 @@
-# better-oms
-Better OMS
+# BetterOMS
+
+BetterOMS is a lightweight, single-user order management system (OMS) for **Polymarket** on the **Polygon** network.  
+It is designed to help an individual trader define, simulate, and execute structured trading plans with safety and clarity.
+
+---
+
+## 🎯 Purpose
+Prediction markets like Polymarket allow users to bet on real-world events, but the native interfaces are geared toward manual, ad-hoc trading.  
+BetterOMS exists to solve this gap by giving a **repeatable, rules-based execution framework** where you can:
+
+- Define trades in **JSON** (with size, price, time-in-force, risk guards).
+- Run them in **paper mode** (simulation) before committing real capital.
+- Execute them safely on-chain through batch jobs, without staying online 24/7.
+
+---
+
+## 🛠️ The Problem
+Typical issues traders face on Polymarket:
+- Manual order entry is error-prone and time-consuming.  
+- No structured way to test strategies before going live.  
+- Risk of leaving funds exposed if you have to paste private keys into scripts.  
+- Lack of tools for “set-and-forget” orders like *cancel after X hours* or *only buy below this price*.  
+
+BetterOMS addresses these by:
+- **Automating execution** on a schedule (e.g., hourly cron).  
+- **Simulating fills** against the live order book for paper trading.  
+- **Separating concerns**: one path for paper mode, one for real mode.  
+
+
+---
+
+## ✅ What It Does
+- Accepts structured trade plans in JSON.  
+- Simulates or executes orders (YES/NO limit orders).  
+- Handles cancellations, expirations, and price guards.  
+- Tracks PnL and positions.  
+- Provides an upgrade path for secure delegated signing.  
+
+---
+
+## 🚀 Roadmap (Phases)
+1. **Scaffolding**: Types, validation, DB, logging.  
+2. **Paper Trading**: Deterministic simulator + PnL tracking.  
+3. **Real Trading**: Polymarket API integration for live orders.  
+4. **Controls**: Cancel-after, price triggers, risk checks.  
+5. **Security & UI**: Delegate contract for signing, minimal dashboard.  
+
+---
+
+## Docs
+
+Please see the /docs folder for more information.
