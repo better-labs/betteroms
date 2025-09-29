@@ -1,0 +1,17 @@
+# env files
+.env
+.env.local
+.env.production
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+
+
+# ds store
+.DS_Store
+/public/.DS_Store
+**/.DS_Store
+

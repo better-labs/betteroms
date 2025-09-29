@@ -1,21 +1,27 @@
 # BetterOMS
 
+
+
 BetterOMS is a lightweight, single-user order management system (OMS) for **Polymarket** on the **Polygon** network.  
 It is designed to help an individual trader define, simulate, and execute structured trading plans with safety and clarity.
 
 ---
 
 ## 🎯 Purpose
-Prediction markets like Polymarket allow users to bet on real-world events, but the native interfaces are geared toward manual, ad-hoc trading.  
-BetterOMS exists to solve this gap by giving a **repeatable, rules-based execution framework** where you can:
+Prediction markets like Polymarket allow users to bet on real-world events, but the native interfaces are geared toward manual, ad-hoc trading. BetterOMS exists to solve this gap by giving a **repeatable, rules-based execution framework** where you can:
 
 - Define trades in **JSON** (with size, price, time-in-force, risk guards).
 - Run them in **paper mode** (simulation) before committing real capital.
 - Execute them safely on-chain through batch jobs, without staying online 24/7.
 
+BetterOMS will also be a key pre-requisite for building BetterAI v2, to help automate signals: https://x.com/HelloBetterAI
+
+
 ---
 
-## 🛠️ The Problem
+## 🛠️ The Problems
+Many excellent prediction market tools exist to generate signals (market alpha) for trading decisions. However, the user of those systems are asked to manually execute trades based on those signals.
+
 Typical issues traders face on Polymarket:
 - Manual order entry is error-prone and time-consuming.  
 - No structured way to test strategies before going live.  
