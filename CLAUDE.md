@@ -60,7 +60,7 @@ pnpm run dev          # Run in watch mode
 ### Phase 1 Scope (Current)
 - **Paper mode only** - no real trading yet
 - **Manual CLI execution** - `pnpm run trade <file-path>`
-- **Simplified JSON schema** - 5 required fields only (runId, mode, trades with marketId, outcome, side, price, size)
+- **Simplified JSON schema** - 5 required fields only (planId, mode, trades with marketId, outcome, side, price, size)
 - **3-table database** - orders, executions, runs (no positions table yet)
 - **Basic fill simulation** - if limit crosses spread, fill at best price
 - **No cancellations or expiry** in Phase 1
@@ -69,7 +69,7 @@ pnpm run dev          # Run in watch mode
 Minimal schema for Phase 1:
 ```json
 {
-  "runId": "2025-09-27-1200Z",
+  "planId": "2025-09-27-1200Z",
   "mode": "paper",
   "trades": [{
     "marketId": "MARKET_ID",
@@ -92,7 +92,7 @@ See `docs/BetterOMS_Spec.md` for detailed user stories:
 ## Database Schema (Phase 1)
 
 **orders** - Core order tracking
-- Fields: id, run_id, market_id, outcome, side, price, size, mode, status, placed_at
+- Fields: id, plan_id, market_id, outcome, side, price, size, mode, status, placed_at
 - Status: 'pending' | 'open' | 'filled' | 'cancelled'
 
 **executions** - Trade fills
@@ -100,14 +100,14 @@ See `docs/BetterOMS_Spec.md` for detailed user stories:
 - References orders.id
 
 **runs** - Execution history
-- Fields: run_id (PK), started_at, completed_at, status, plan_file, summary_json, error_message
+- Fields: plan_id (PK), started_at, completed_at, status, plan_file, summary_json, error_message
 
 ## Architecture Notes
 
 - **Postgres-first**: Designed for serverless (Vercel) deployment from the start
 - **No SQLite**: Serverless platforms have no persistent filesystem
 - **File-based input**: Phase 1 loads JSON from file path only (no S3/DB loading)
-- **Idempotency**: `runId` prevents duplicate execution
+- **Idempotency**: `planId` prevents duplicate execution
 - **Position calculation**: Derived from executions table (no separate positions table in Phase 1)
 - **Credential management**: Uses `.env.local` (never committed, follows Vercel convention)
 - **TypeScript CLOB client**: Official `@polymarket/clob-client` for all Polymarket API interactions

@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/yourusername/betteroms/schemas/trade-plan-v1.schema.json",
+  "title": "BetterOMS Trade Plan (Phase 1)",
+  "description": "Simplified trade plan schema for Phase 1 paper trading on Polymarket",
+  "type": "object",
+  "required": ["planId", "mode", "trades"],
+  "additionalProperties": false,
+  "properties": {
+    "planId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for this trade plan (idempotency key). Prevents duplicate execution of the same plan.",
+      "examples": ["2025-09-27-1200Z", "test-001", "my-trade-plan-123"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["paper", "live"],
+      "description": "Trading mode. Phase 1 only supports 'paper' (simulated trading). Live trading will be added in Phase 3."
+    },
+    "trades": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Array of limit orders to execute in this trade plan",
+      "items": {
+        "type": "object",
+        "required": ["marketId", "outcome", "side", "price", "size"],
+        "additionalProperties": false,
+        "properties": {
+          "marketId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Polymarket market identifier (market ID or slug)",
+            "examples": ["0x1234567890abcdef", "will-trump-win-2024"]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["YES", "NO"],
+            "description": "Outcome side to trade: YES or NO"
+          },
+          "side": {
+            "type": "string",
+            "enum": ["BUY"],
+            "description": "Order side. Phase 1 only supports BUY orders. SELL orders will be added in Phase 2."
+          },
+          "price": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Limit price expressed as decimal probability. Example: 0.42 means 42% probability (buy/sell at 42 cents per share)",
+            "examples": [0.42, 0.55, 0.33]
+          },
+          "size": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": 0,
+            "description": "USDC collateral amount to spend on this order. Example: 500 means spend $500 USDC",
+            "examples": [100, 500, 1000]
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "planId": "2025-09-27-1200Z",
+      "mode": "paper",
+      "trades": [
+        {
+          "marketId": "will-trump-win-2024",
+          "outcome": "YES",
+          "side": "BUY",
+          "price": 0.42,
+          "size": 500
+        },
+        {
+          "marketId": "will-biden-win-2024",
+          "outcome": "NO",
+          "side": "BUY",
+          "price": 0.65,
+          "size": 300
+        }
+      ]
+    }
+  ]
+}

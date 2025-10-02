@@ -19,7 +19,7 @@ BetterOMS will also be a key pre-requisite for building BetterAI v2, to help aut
 
 ---
 
-## 🛠️ The Problems
+## 🛠️ The Problems Addressed
 Many excellent prediction market tools exist to generate signals (market alpha) for trading decisions. However, the user of those systems are asked to manually execute trades based on those signals.
 
 Typical issues traders face on Polymarket:
