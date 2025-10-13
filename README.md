@@ -41,10 +41,11 @@ BetterOMS addresses these by:
 ---
 
 ## ✅ What It Does
-- Accepts structured trade plans in JSON.  
-- Simulates or executes orders (YES/NO limit orders).  
-- Handles cancellations, expirations, and price guards.  
-- Tracks PnL and positions.  
+- Accepts structured trade plans in JSON.
+- Simulates or executes orders (YES/NO outcomes with BUY/SELL support).
+- Supports both MARKET and LIMIT order types.
+- Handles cancellations, expirations, and price guards.
+- Tracks PnL and positions.
 - Provides an upgrade path for secure delegated signing.  
 
 ---

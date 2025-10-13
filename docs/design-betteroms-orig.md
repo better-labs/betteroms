@@ -12,7 +12,7 @@ Future phases add price triggers, expirations, and (optional) delegated smart‑
 ## Scope & Goals
 - **User**: one operator (you).
 - **Exchanges**: **Polymarket** (Polygon).
-- **Order types**: YES/NO outcome orders via **limit** orders (bid/ask); marketable limit supported by setting price to cross the spread.
+- **Order types**: YES/NO outcome orders with **BUY/SELL** sides; supports **MARKET** (immediate execution at best available price) and **LIMIT** orders (execute at specified price or better).
 - **Modes**: **paper** (simulate) and **live** (on‑chain via Polymarket APIs).
 - **Cadence**: Phase 1 manual CLI; later phases add hourly cron.
 - **Latency sensitivity**: low; no HFT ambitions.
@@ -495,10 +495,11 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 **Goal**: Validate core concept with minimal scope
 
 **Core Features:**
-- Parse & validate simplified JSON plans (5 required fields: planId, mode, tradeInstructions)
+- Parse & validate simplified JSON plans (6 required fields: planId, mode, tradeInstructions with marketId, outcome, side, orderType, size; price required for LIMIT orders)
 - **Paper mode only** (no live trading yet)
-- **BUY orders only** (SELL orders in Phase 2+)
-- Limit order placement for YES/NO outcomes
+- **BUY and SELL orders** supported
+- **MARKET and LIMIT order types** supported
+- Order placement for YES/NO outcomes
 - Order sizing in USDC collateral (e.g., "buy $500 of YES @ 0.42")
 - Basic fill simulation against order book snapshot
 - Persist orders, executions, runs to Postgres (3 tables)
@@ -512,12 +513,12 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 - TypeScript project setup with `pnpm`
 - Environment variable configuration (`.env.local` file with optional Polymarket credentials)
 - Credential generation script: `pnpm run generate-creds`
-- Simplified JSON schema (5 required fields)
+- JSON schema supporting BUY/SELL and MARKET/LIMIT orders (6 required fields, price conditional on orderType)
 - JSON Schema file at `/src/domain/schemas/trade-plan-v1.schema.json`
 - Zod validation for trade plans
 - Postgres database with 3 tables (orders, executions, runs)
 - Drizzle ORM setup
-- Basic paper trading engine (immediate fill logic only)
+- Basic paper trading engine supporting both MARKET (immediate execution) and LIMIT (price-based) orders
 - CLI entry point: `pnpm run trade <file-path>`
 - Position calculation from executions
 - Run summary output (stdout + DB)
@@ -525,7 +526,6 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 - Documentation for credential setup (optional in Phase 1)
 
 **Constraints (Explicitly Excludes):**
-- SELL orders (requires token quantity management)
 - Order cancellations and expiry
 - Price guards (ceil/floor)
 - Risk checks
@@ -534,7 +534,6 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 - Concurrent plan execution
 - File-based input only (no S3/DB loading)
 - Manual execution (no cron)
-- Simple fill logic (if limit crosses spread, fill at best price)
 
 **Success Criteria:**
 - All 5 user stories implemented (US-0 through US-5)
@@ -550,7 +549,7 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 **Goal**: Enhance paper trading with advanced features and performance optimizations
 
 **Core Features:**
-- **SELL orders** with token quantity sizing
+- Token quantity sizing (Phase 1 uses USDC collateral only)
 - Cancel‑after (time‑based) for GTT orders
 - Position/PNL tracking with dedicated `positions` table (performance)
 - Better fill simulation with slippage modeling
@@ -564,14 +563,14 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 - `positions` table schema and repository
 - `audit_logs` table schema and repository
 - Enhanced fill simulation engine with slippage model
-- SELL order support in validation and execution
+- Token quantity sizing support (in addition to USDC collateral)
 - Cancel-after logic with scheduled cleanup
 - Extended JSON schema with optional fields
 - Token quantity conversion utilities
 - Detailed run report generator
 
 **Success Criteria:**
-- SELL orders execute correctly in paper mode
+- Token quantity sizing works correctly for both BUY and SELL orders
 - Positions table stays in sync with executions
 - Orders expire correctly based on `cancelAfter`
 - Run reports show detailed P&L breakdown
@@ -611,13 +610,13 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 - Comprehensive error codes and logging
 
 **Prerequisites:**
-- Phase 2 complete (SELL orders and positions table required)
+- Phase 2 complete (positions table and token quantity sizing required)
 - Polymarket credentials configured
 - Wallet funded with USDC on Polygon
 - Token allowances set
 
 **Success Criteria:**
-- Can place live BUY and SELL orders on Polymarket
+- Can place live BUY and SELL orders on Polymarket (both MARKET and LIMIT types)
 - Orders tracked correctly with external IDs
 - Fills reconciled to database accurately
 - Balance checks prevent overdrafts
@@ -735,7 +734,8 @@ Result: Capture spread while biasing toward predicted direction
    - Halt quoting if inventory limit breached
 
 **Prerequisites**:
-- ✅ Phase 2: SELL orders and positions table
+- ✅ Phase 1: BUY/SELL orders with MARKET/LIMIT support
+- ✅ Phase 2: Positions table and token quantity sizing
 - ✅ Phase 3: Live trading via Polymarket CLOB
 - ❌ NEW: Strategy abstraction layer
 - ❌ NEW: Real-time execution engine (not batch)
@@ -882,13 +882,21 @@ Minimal required fields only - no optional features, no defaults section.
 {
   "planId": "2025-09-27-1200Z",
   "mode": "paper",              // "paper" only in Phase 1
-  "tradeInstructions": [
+  "trades": [
     {
       "marketId": "MARKET_ID_OR_SLUG",
       "outcome": "YES",         // "YES" | "NO"
-      "side": "BUY",            // "BUY" only in Phase 1
-      "price": 0.42,            // 0..1 (probability as decimal)
+      "side": "BUY",            // "BUY" | "SELL"
+      "orderType": "LIMIT",     // "MARKET" | "LIMIT"
+      "price": 0.42,            // 0..1 (required for LIMIT, ignored for MARKET)
       "size": 500               // USDC amount to spend (e.g., $500)
+    },
+    {
+      "marketId": "ANOTHER_MARKET",
+      "outcome": "NO",
+      "side": "BUY",
+      "orderType": "MARKET",    // Market order - executes at best available price
+      "size": 300               // No price field needed for MARKET orders
     }
   ]
 }
@@ -917,37 +925,49 @@ export const TradePlanSchema = z.object({
   /** Trading mode - only 'paper' supported in Phase 1 */
   mode: z.literal("paper"),
 
-  /** Array of limit orders to place */
-  tradeInstructions: z.array(z.object({
+  /** Array of orders to place */
+  trades: z.array(z.object({
     /** Polymarket market ID or slug */
     marketId: z.string().min(1),
 
     /** Outcome side: YES or NO */
     outcome: z.enum(["YES", "NO"]),
 
-    /** Order side - only BUY in Phase 1 (SELL in Phase 2+) */
-    side: z.enum(["BUY"]),
+    /** Order side: BUY or SELL */
+    side: z.enum(["BUY", "SELL"]),
 
-    /** Limit price as decimal probability (e.g., 0.42 = 42%) */
-    price: z.number().min(0).max(1),
+    /** Order type: MARKET or LIMIT */
+    orderType: z.enum(["MARKET", "LIMIT"]),
+
+    /** Limit price as decimal probability (required for LIMIT orders) */
+    price: z.number().min(0).max(1).optional(),
 
     /** USDC collateral amount (e.g., 500 = $500 USDC) */
     size: z.number().positive()
   })).min(1)
-});
+}).refine(
+  (data) => {
+    // Validate that LIMIT orders have a price
+    return data.trades.every(
+      (trade) => trade.orderType !== "LIMIT" || trade.price !== undefined
+    );
+  },
+  { message: "LIMIT orders must specify a price" }
+);
 
 export type TradePlan = z.infer<typeof TradePlanSchema>;
 ```
 
 **Phase 1 constraints:**
 - `mode`: Must be "paper" (live trading in Phase 3)
-- `side`: Must be "BUY" (SELL orders in Phase 2)
+- `side`: "BUY" or "SELL" supported
+- `orderType`: "MARKET" (immediate execution) or "LIMIT" (price-based)
+- `price`: Required for LIMIT orders, ignored for MARKET orders
 - `size`: USDC collateral amount (token quantities in Phase 2)
 - No `defaults` section
 - No `timeInForce`, `cancelAfterSec` (orders don't expire)
 - No `priceCeil`, `priceFloor` guards (Phase 4 feature)
 - No `notes` field
-- `type` assumed to be `LIMIT` (only order type)
 
 ### Phase 2+ (Full Schema)
 ```jsonc
@@ -1002,14 +1022,13 @@ A: Users identify marketId separately (via Polymarket UI, API, or external tools
 
 ### Position Sizing
 **Q: Should orders be sized in USDC collateral or outcome token quantities?**
-A: **Phase 1 simplification: Use USDC collateral only for BUY orders.**
-- BUY orders: `size` field represents USDC amount to spend (e.g., 500 = $500 USDC)
-- SELL orders: Not supported in Phase 1 (paper mode only)
-- Rationale: Simpler for users ("I want to buy $500 of YES") and matches Polymarket API flexibility
+A: **Phase 1: Use USDC collateral sizing.**
+- Both BUY and SELL orders: `size` field represents USDC amount (e.g., 500 = $500 USDC)
+- Rationale: Simpler for users ("I want to buy $500 of YES" or "I want to sell $300 worth") and matches Polymarket API flexibility
 
 **Phase 2+**: Add support for:
 - Token-quantity sizing (e.g., "buy 1000 shares")
-- SELL orders sized in token quantities
+- Both sizing modes for BUY and SELL orders
 - Helper utilities to convert between USDC ↔ token quantities
 
 ### Error Handling
