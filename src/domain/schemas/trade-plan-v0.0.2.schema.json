@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/better-labs/betteroms/schemas/trade-plan-v0.0.2.schema.json",
+  "$id": "trade-plan-v0.0.2.schema.json",
   "version": "0.0.2",
   "title": "BetterOMS Trade Plan (Phase 1)",
   "description": "Trade plan schema for Phase 1 paper trading on Polymarket with support for buy/sell and market/limit orders",
