@@ -1,9 +1,11 @@
 # BetterOMS
 
-
-
 BetterOMS is a lightweight, single-user order management system (OMS) for **Polymarket** on the **Polygon** network.  
 It is designed to help an individual trader define, simulate, and execute structured trading plans with safety and clarity.
+
+To be used for both live trading and paper trading (for benchmark purposes).It accepts JSON trade plans (with a **paper vs. live** toggle), runs on an hourly cron, and executes/updates/cancels orders via Polymarket APIs.
+
+BetterOMS is part of a suite of tools. For more context see here: https://github.com/better-labs
 
 ---
 
@@ -14,7 +16,9 @@ Prediction markets like Polymarket allow users to bet on real-world events, but 
 - Run them in **paper mode** (simulation) before committing real capital.
 - Execute them safely on-chain through batch jobs, without staying online 24/7.
 
-BetterOMS will also be a key pre-requisite for building BetterAI v2, to help automate signals: https://x.com/HelloBetterAI
+BetterOMS will also be a key pre-requisite for building BetterAI v2, to help automate signals generated via BetterAI Engine.
+
+
 
 
 ---
@@ -30,7 +34,7 @@ Typical issues traders face on Polymarket:
 
 BetterOMS addresses these by:
 - **Automating execution** on a schedule (e.g., hourly cron).  
-- **Simulating fills** against the live order book for paper trading.  
+- **Simulating fills** against the live order book for paper trading and benchmarking.  
 - **Separating concerns**: one path for paper mode, one for real mode.  
 
 

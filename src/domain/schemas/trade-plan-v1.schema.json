@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/yourusername/betteroms/schemas/trade-plan-v1.schema.json",
   "title": "BetterOMS Trade Plan (Phase 1)",
-  "description": "Simplified trade plan schema for Phase 1 paper trading on Polymarket",
+  "description": "Trade plan schema for Phase 1 paper trading on Polymarket with support for buy/sell and market/limit orders",
   "type": "object",
   "required": ["planId", "mode", "trades"],
   "additionalProperties": false,
@@ -21,11 +21,23 @@
     "trades": {
       "type": "array",
       "minItems": 1,
-      "description": "Array of limit orders to execute in this trade plan",
+      "description": "Array of orders to execute in this trade plan (market or limit orders)",
       "items": {
         "type": "object",
-        "required": ["marketId", "outcome", "side", "price", "size"],
+        "required": ["marketId", "outcome", "side", "orderType", "size"],
         "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "orderType": { "const": "LIMIT" }
+              }
+            },
+            "then": {
+              "required": ["price"]
+            }
+          }
+        ],
         "properties": {
           "marketId": {
             "type": "string",
@@ -40,8 +52,13 @@
           },
           "side": {
             "type": "string",
-            "enum": ["BUY"],
-            "description": "Order side. Phase 1 only supports BUY orders. SELL orders will be added in Phase 2."
+            "enum": ["BUY", "SELL"],
+            "description": "Order side: BUY to purchase shares, SELL to sell shares you own"
+          },
+          "orderType": {
+            "type": "string",
+            "enum": ["MARKET", "LIMIT"],
+            "description": "Order type: MARKET executes immediately at best available price, LIMIT only executes at specified price or better"
           },
           "price": {
             "type": "number",
@@ -49,7 +66,7 @@
             "maximum": 1,
             "exclusiveMinimum": 0,
             "exclusiveMaximum": 1,
-            "description": "Limit price expressed as decimal probability. Example: 0.42 means 42% probability (buy/sell at 42 cents per share)",
+            "description": "Limit price expressed as decimal probability. Required for LIMIT orders, ignored for MARKET orders. Example: 0.42 means 42% probability (buy/sell at 42 cents per share)",
             "examples": [0.42, 0.55, 0.33]
           },
           "size": {

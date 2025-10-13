@@ -3,7 +3,9 @@
 (as of 9/29)
 
 ## TL;DR
-A single‑user, batch‑executed trading orchestration tool for Polymarket on Polygon. It accepts JSON trade plans (with a **paper vs. live** toggle), runs on an hourly cron, and executes/updates/cancels orders via Polymarket APIs. Future phases add price triggers, expirations, and (optional) delegated smart‑contract signing to avoid handling raw private keys.
+A single‑user, batch‑executed trading orchestration tool for Polymarket on Polygon. To be used for both live trading and paper trading (for benchmark purposes).It accepts JSON trade plans (with a **paper vs. live** toggle), runs on an hourly cron, and executes/updates/cancels orders via Polymarket APIs.
+
+Future phases add price triggers, expirations, and (optional) delegated smart‑contract signing to avoid handling raw private keys.
 
 ---
 
