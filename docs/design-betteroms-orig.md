@@ -39,6 +39,10 @@ Future phases add price triggers, expirations, and (optional) delegated smart‑
   3. Save private key (remove '0x' prefix if present)
 - User creates `.env.local` file in project root with credentials:
   ```
+  # Database connection (required)
+  DATABASE_URL=postgresql://user:password@host:port/database
+
+  # Polymarket credentials (optional in Phase 1 paper mode)
   POLYMARKET_PRIVATE_KEY=your_private_key_here
   POLYMARKET_API_KEY=your_api_key_here
   POLYMARKET_API_SECRET=your_api_secret_here
@@ -47,17 +51,31 @@ Future phases add price triggers, expirations, and (optional) delegated smart‑
 - System validates `.env.local` exists and contains required variables on startup
 - Private key is NEVER logged or displayed in output
 - `.env.local` file is git-ignored by default (in `.gitignore`)
+- `.env.example` file should be provided with placeholder values for reference
 
 **Phase 1 Note:**
 - API credentials are optional in Phase 1 (paper mode)
 - Paper mode can use public market data endpoints (no authentication required)
 - Live trading (Phase 3) will require full API credentials
 
+**`.env.example` Template:**
+```bash
+# Database connection (required for all phases)
+DATABASE_URL=postgresql://user:password@host:port/database
+
+# Polymarket credentials (optional in Phase 1 paper mode, required for Phase 3+ live trading)
+POLYMARKET_PRIVATE_KEY=your_private_key_here
+POLYMARKET_API_KEY=your_api_key_here
+POLYMARKET_API_SECRET=your_api_secret_here
+POLYMARKET_API_PASSPHRASE=your_passphrase_here
+```
+
 **Security Considerations:**
 - Private key grants full access to wallet funds - treat as highly sensitive
 - API credentials are deterministically derived from private key signature
 - Future Phase 5: Implement delegated signer contract to avoid handling private keys
 - Recommend: Use dedicated trading wallet with limited funds for initial testing
+- For Phase 1, recommend using Neon free tier or Supabase free tier for Postgres
 
 ---
 
@@ -67,9 +85,11 @@ Future phases add price triggers, expirations, and (optional) delegated smart‑
 **So that** I can simulate trades without risking real capital
 
 **Acceptance Criteria:**
-- CLI command accepts file path: `pnpm run trade ./plans/test.json`
-- JSON validated against Phase 1 schema (planId, mode, tradeInstructions array)
-- Orders persisted to `orders` table with status 'pending'
+- CLI command accepts file path: `pnpm run execute:trade-plan ./plans/test.json`
+- CLI command accepts JSON via stdin: `cat plan.json | pnpm run execute:trade-plan` or `echo '{"planId":...}' | pnpm run execute:trade-plan`
+- CLI built with Commander.js for professional UX with help text
+- JSON validated against Phase 1 schema (src/domain/schemas/trade-plan-v0.0.2.schema.json)
+- Orders persisted to `orders` table with status 'open'
 - Run record created in `runs` table
 
 ### US-2: Simulate Order Fill
@@ -161,6 +181,14 @@ Then system should reject with Zod validation error
 And no orders or run records should be created
 ```
 
+### Scenario 6: SELL Order Without Position
+```
+Given I have no existing position in market "MARKET_ID" for outcome "YES"
+When I submit paper SELL order for "YES"
+Then system should reject with error "Cannot SELL: no existing position for YES in market MARKET_ID"
+And no orders or run records should be created
+```
+
 ---
 
 ## High‑Level Architecture
@@ -187,8 +215,9 @@ And no orders or run records should be created
 - **Runtime**: Node.js (TypeScript).
 - **Job runner**: Vercel serverless functions (Vercel Cron for automation in later phases).
 - **DB**: Postgres from day 1 (Vercel Postgres, Neon, or Supabase).
-  - **Local dev**: Docker Compose with Postgres container.
-  - **Production**: Same connection string, deployed to Vercel.
+  - **Phase 1**: Use live hosted Postgres (Neon free tier, Supabase, or Vercel Postgres)
+  - **Connection**: `DATABASE_URL` environment variable in `.env.local`
+  - **No Docker Compose**: Phase 1 uses cloud-hosted Postgres directly (simpler setup)
   - **Why Postgres-first**: Vercel/serverless platforms don't support SQLite (no persistent filesystem).
 - **Key mgmt (Phase 1-5)**: env‑scoped private key in secure secret store (**only if you must**).
 - **Key mgmt (Phase 6+)**: **Delegated smart‑contract executor** on Polygon with revocable allowances (see Security).
@@ -197,38 +226,40 @@ And no orders or run records should be created
 
 ## Project Layout (TypeScript)
 ```
-/src
+/services
   /adapters
-    polymarketClient.ts        // REST/WS calls, auth, retries
+    polymarketClient.ts      // REST/WS calls, auth, retries
   /core
-    executor.ts                // routes to paper vs live
-    paperEngine.ts             // fill simulation
-    liveEngine.ts              // on-chain execution via adapter
-    risk.ts                    // caps, notional limits, sanity checks
-  /domain
-    types.ts                   // Order, Market, Position, enums
-    validation.ts              // zod schemas for inputs
-  /io
-    inputLoader.ts             // Phase 1: load JSON from file path only
-    logger.ts                  // structured logging
+    executor.ts              // routes to paper vs live
+    paperEngine.ts           // fill simulation
+    liveEngine.ts            // on-chain execution via adapter
+    risk.ts                  // caps, notional limits, sanity checks
   /persistence
-    db.ts                      // Drizzle client (Postgres)
-    schema.ts                  // Drizzle table schemas
-    repositories.ts            // Orders/Executions/Runs repos
+    db.ts                    // Drizzle client (Postgres)
+    schema.ts                // Drizzle table schemas
+    
+  /io
+    inputLoader.ts           // Phase 1: load JSON from file path or stdin
+    logger.ts                // structured logging
   /rules
-    timeExpiry.ts              // cancel-after, good-til time
-    priceTriggers.ts           // simple stop/take-profit (phase 2)
-  /utils
-    math.ts                    // odds/price conversions
-    clock.ts                   // time helpers
-/scripts
-  generate-credentials.ts      // EOA signup: pnpm run generate-creds
-  set-allowances.ts            // Phase 3+: pnpm run set-allowances
-/index.ts                      // CLI entry point: pnpm run trade <file>
-/package.json                  // scripts: generate-creds, trade, dev, db:*
-/.env.local                    // git-ignored secrets (never commit!)
-/.gitignore                    // must include .env.local
-/docker-compose.yml            // local Postgres for development
+    timeExpiry.ts            // cancel-after, good-til time
+    priceTriggers.ts         // simple stop/take-profit (phase 2)
+/domain
+  types.ts                   // Order, Market, Position, enums
+  validation.ts              // zod schemas for inputs
+/utils
+  math.ts                    // odds/price conversions
+  clock.ts                   // time helpers
+/commands
+  trade.ts                   // Trade command handler
+  generate-creds.ts          // Credential generation command
+  db-migrate.ts              // Phase 2+: database migration command
+  set-allowances.ts          // Phase 3+: token allowances command
+/cli.ts                      // CLI entry point using Commander.js
+/package.json                // scripts: betteroms, execute:trade-plan, generate-creds, dev, db:*
+/.env.local                  // git-ignored secrets (never commit!)
+/.env.example                // example env file with placeholders (committed)
+/.gitignore                  // must include .env.local
 ```
 
 **Key Dependencies (Phase 1):**
@@ -240,13 +271,14 @@ And no orders or run records should be created
     "drizzle-orm": "^latest",
     "postgres": "^latest",
     "zod": "^latest",
-    "dotenv": "^latest"
+    "dotenv": "^latest",
+    "commander": "^latest"
   },
   "scripts": {
-    "generate-creds": "tsx scripts/generate-credentials.ts",
-    "set-allowances": "tsx scripts/set-allowances.ts",
-    "trade": "tsx index.ts",
-    "dev": "tsx watch index.ts",
+    "betteroms": "tsx cli.ts",
+    "execute:trade-plan": "tsx cli.ts execute:trade-plan",
+    "generate-creds": "tsx cli.ts generate-creds",
+    "dev": "tsx watch cli.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
@@ -254,32 +286,38 @@ And no orders or run records should be created
 }
 ```
 
-**Note on `set-allowances` script:**
-- Phase 3+ only (live trading)
-- Approves USDC and CTF tokens to Polymarket exchange
-- One-time setup per wallet
-- Not needed for Phase 1 paper trading
+**CLI Design Philosophy:**
+- **Commander.js**: Professional CLI framework with built-in help, version info, and command structure
+- **Command-based**: Each major function is a separate command (inspired by betteraiengine CLI)
+- **Extensible**: Easy to add new commands in future phases
+- **Type-safe**: Full TypeScript integration with proper error handling
+- **stdin support**: Automatic detection of piped input for scripting/automation
 
-Pros:
-- Clear seams (adapter/core/domain) => easy to test & swap (paper vs live).
-- Rules isolated for incremental feature add.
-- Scripts directory for CLI utilities (generate-creds, future: market-lookup, etc.)
+**Commands:**
+- `execute:trade-plan [file-path]`: Execute trade plan (file or stdin)
+- `generate:creds`: Generate Polymarket API credentials
+- `list:positions`: View current positions (Phase 2)
+- `list:runs`: View execution history (Phase 2)
+
 
 ---
 
 
-## Phase Task Plan
+# Phased Task Plan
 
 This section consolidates deliverables, constraints, and success criteria for each development phase.
 
 ---
 
 ## Paper Trading Engine (Phase 1-2)
-- Pull latest **order book snapshot** / last trade for each market at batch time.
+- Pull latest **order book snapshot** from **Polymarket CLOB API** for each market at execution time.
+- **Data Source**: Use Polymarket public CLOB API endpoints (no authentication required in Phase 1 paper mode)
 - Fill logic:
-  1. If limit price **crosses or equals** opposing best, assume immediate fill up to available size (cap to configured liquidity assumption).
-  2. Otherwise, leave as **resting order** in simulated book until a future run where crossing occurs (based on new snapshot).
-- Slippage model: simple (best + tick); configurable spread cushion.
+  1. **MARKET orders**: Always fill 100% immediately at current best opposing price
+  2. **LIMIT orders**: If limit price **crosses or equals** opposing best, assume immediate fill at best price. Otherwise, leave as **resting order** (status 'open') in simulated book.
+- **SELL order validation**: Check for existing position before allowing SELL orders. Error if no position exists (Phase 1 does not support short positions).
+- **Slippage model (Phase 1)**: Zero slippage - orders fill at exact best opposing price (no price impact simulation)
+- **Sizing**: Both BUY and SELL orders sized in USDC collateral (e.g., size: 500 = $500 USDC worth of tokens)
 - Record simulated executions and positions identically to live mode.
 
 *Note*: Deterministic by seeding with `planId` + marketId for repeatable tests.
@@ -293,21 +331,34 @@ This section consolidates deliverables, constraints, and success criteria for ea
 4. **Track**: poll order status next batch; cancel if past `cancelAfterSec`.
 5. **Reconcile**: update fills → positions → PnL.
 
-> Implementation detail will depend on Polymarket’s current REST/WS endpoints for markets, order placement, order status, and cancel. Wrap all calls in `adapters/polymarketClient.ts` with strong typing and retries.
+> Implementation detail will depend on Polymarket's current REST/WS endpoints for markets, order placement, order status, and cancel. Wrap all calls in `services/adapters/polymarketClient.ts` with strong typing and retries.
 
 ---
 
 ## Batch Scheduling
 
-### Phase 1 (File-Based)
-- **Invocation**: Manual command-line execution via `pnpm run trade <file-path>`
-- **Input**: Single JSON trade plan file specified as CLI argument
-  - Example: `pnpm run trade ./plans/my-trade.json`
+### Phase 1 (File-Based and stdin)
+- **Invocation**: Manual command-line execution via Commander.js CLI
+- **CLI Structure**: `pnpm run betteroms <command> [options]`
+  - Main commands: `execute:trade-plan`, `generate-creds`
+  - Built-in help: `pnpm run betteroms --help` or `pnpm run betteroms execute:trade-plan --help`
+- **Input**: Single JSON trade plan via one of two methods:
+  - **File path**: `pnpm run execute:trade-plan ./plans/my-trade.json`
+  - **stdin (pipe)**: `cat plan.json | pnpm run execute:trade-plan` or `echo '{"planId":...}' | pnpm run execute:trade-plan`
+  - **stdin (heredoc)**:
+    ```bash
+    pnpm run execute:trade-plan <<EOF
+    {"planId":"test-001","mode":"paper","trades":[...]}
+    EOF
+    ```
   - No S3, database, or multi-file loading in Phase 1
 - **Execution flow**:
-  - Load and validate JSON plan from specified file path
+  - Commander.js parses command and arguments
+  - Command handler loads JSON plan from file path (if provided) OR stdin (if no file path)
+  - Validate JSON plan against Zod schema
   - Execute trades (paper or live mode)
   - Emit run report (JSON + human log)
+  - Exit with appropriate status code
 
 ### Phase 2+ (Automated Scheduling)
 - **Default**: every **60 min** (env `CRON_INTERVAL_MINUTES`) via cron or serverless scheduler
@@ -319,9 +370,494 @@ This section consolidates deliverables, constraints, and success criteria for ea
 
 ---
 
+---
+
+### Phase 1 — Paper Trading MVP (Easy→Medium)
+
+**Goal**: Validate core concept with minimal scope
+
+**Core Features:**
+- Parse & validate simplified JSON plans (6 required fields: planId, mode, trades with marketId, outcome, side, orderType, size; price required for LIMIT orders)
+- **Paper mode only** (no live trading yet)
+- **BUY and SELL orders** supported
+- **MARKET and LIMIT order types** supported
+- **MARKET orders**: Always fill 100% at current best opposing price
+- **LIMIT orders**: Fill if limit crosses spread, otherwise remain open
+- Order placement for YES/NO outcomes
+- Order sizing in USDC collateral (e.g., "buy $500 of YES @ 0.42")
+- **SELL order validation**: Reject SELL orders when no existing position (no short positions in Phase 1)
+- Basic fill simulation against Polymarket CLOB API order book snapshot
+- Persist orders, executions, runs to Postgres (3 tables)
+- Calculate P&L on-the-fly from executions (no positions table)
+- Idempotency: `planId` to avoid duplicate submissions
+- CLI invocation: `pnpm run execute:trade-plan <file-path>` OR `cat plan.json | pnpm run execute:trade-plan`
+- Fail-fast error handling (no retry queues)
+- Sequential execution (one plan at a time)
+
+**Deliverables:**
+- TypeScript project setup with `pnpm`
+- Environment variable configuration:
+  - `.env.example` file with placeholders (committed to repo)
+  - `.env.local` file for actual credentials (git-ignored)
+  - `DATABASE_URL` for live Postgres connection (Neon, Supabase, or Vercel Postgres)
+  - Optional Polymarket credentials for Phase 1
+- Commander.js CLI structure (`cli.ts` + `/commands` directory)
+  - `execute:trade-plan` command: Execute trade plans
+  - `generate-creds` command: Generate Polymarket credentials
+  - Built-in help and version info
+- JSON schema supporting BUY/SELL and MARKET/LIMIT orders (6 required fields, price conditional on orderType)
+- JSON Schema file at `src/domain/schemas/trade-plan-v0.0.2.schema.json`
+- Zod validation for trade plans
+- Market ID parsing logic: distinguish between Polymarket market IDs and slugs, handle both formats
+- Postgres database with 3 tables (orders, executions, runs)
+- Drizzle ORM setup with live Postgres connection
+- Basic paper trading engine with zero slippage:
+  - MARKET orders: fill 100% at best opposing price
+  - LIMIT orders: fill if crossing spread, otherwise remain open
+  - SELL validation: check for existing position
+- CLI supporting file path or stdin: `pnpm run execute:trade-plan <file-path>` OR `cat plan.json | pnpm run execute:trade-plan`
+- Position calculation from executions (on-the-fly, no positions table)
+- Run summary output (stdout + DB)
+- Light automated testing for core scenarios
+- Documentation for credential setup and database setup
+
+**Constraints (Explicitly Excludes):**
+- Order cancellations and expiry
+- Price guards (ceil/floor)
+- Risk checks
+- Live trading mode
+- Automated scheduling
+- Concurrent plan execution
+- No S3 or database-backed plan loading (Phase 1 uses file path or stdin only)
+- Manual execution (no cron)
+
+**Success Criteria:**
+- All 5 user stories implemented (US-0 through US-5)
+- All 6 test scenarios passing (including SELL order validation)
+- Can run `pnpm run execute:trade-plan plan.json` and see results
+- Database persists orders, executions, runs correctly
+- Idempotency works (duplicate planId rejected)
+- SELL orders without existing positions are rejected with clear error
+- MARKET orders fill 100% at best price
+- LIMIT orders fill when crossing spread, otherwise remain open
+
+---
+
+### Phase 2 — Paper Trading Quality (Medium)
+
+**Goal**: Enhance paper trading with advanced features and performance optimizations
+
+**Core Features:**
+- Token quantity sizing (Phase 1 uses USDC collateral only)
+- Cancel‑after (time‑based) for GTT orders
+- Position/PNL tracking with dedicated `positions` table (performance)
+- Better fill simulation with slippage modeling
+- Detailed run reports with P&L breakdown per market
+- Helper utilities: USDC ↔ token quantity conversion
+- Add `defaults` section to JSON schema (maxNotionalUSD, goodForSeconds)
+- Time expiry checking and order cleanup
+- `audit_logs` table for structured event tracking
+
+**Deliverables:**
+- `positions` table schema and repository
+- `audit_logs` table schema and repository
+- Enhanced fill simulation engine with slippage model
+- Token quantity sizing support (in addition to USDC collateral)
+- Cancel-after logic with scheduled cleanup
+- Extended JSON schema with optional fields
+- Token quantity conversion utilities
+- Detailed run report generator
+
+**Success Criteria:**
+- Token quantity sizing works correctly for both BUY and SELL orders
+- Positions table stays in sync with executions
+- Orders expire correctly based on `cancelAfter`
+- Run reports show detailed P&L breakdown
+- Audit logs capture all key events
+
+---
+
+### Phase 3 — Live Trading Adapter (Hardest)
+
+**Goal**: Enable real on-chain trading via Polymarket CLOB
+
+**Core Features:**
+- Polymarket API integration (markets, orders, status)
+- Live mode execution via Polymarket CLOB
+- Wallet balance checks (USDC and outcome tokens)
+- Token approval validation (USDC + CTF)
+- Error handling and retry logic with exponential backoff
+- Idempotency for on-chain operations
+- Order status polling and reconciliation
+- External order/execution ID tracking
+- Pre-trade risk checks (balance, approvals, venue status)
+
+**Deliverables:**
+- Complete Polymarket adapter (`services/adapters/polymarketClient.ts`)
+  - `placeOrder()`, `cancelOrder()`, `getOrderStatus()`
+  - `getOrderBook()`, `getMarketPrice()`
+  - Error handling and retries
+- Live trading engine (`services/core/liveEngine.ts`)
+  - Pre-trade checks
+  - Order placement and tracking
+  - Fill reconciliation
+- Token allowances helper command (`commands/set-allowances.ts`)
+- Database schema updates:
+  - `external_order_id` field on orders
+  - `external_execution_id` field on executions
+- Mode routing logic in executor (paper vs live)
+- Comprehensive error codes and logging
+
+**Prerequisites:**
+- Phase 2 complete (positions table and token quantity sizing required)
+- Polymarket credentials configured
+- Wallet funded with USDC on Polygon
+- Token allowances set
+
+**Success Criteria:**
+- Can place live BUY and SELL orders on Polymarket (both MARKET and LIMIT types)
+- Orders tracked correctly with external IDs
+- Fills reconciled to database accurately
+- Balance checks prevent overdrafts
+- Idempotency prevents duplicate live orders
+- Errors handled gracefully with retries
+
+
+---
+
+
+---
+
+## Polymarket API Credential Setup
+
+For detailed credential setup instructions, see [spec-credential-setup.md](spec-credential-setup.md).
+
+---
+
+
+
+## JSON Input
+
+### Phase 1 (Simplified Schema)
+Minimal required fields only - no optional features, no defaults section.
+
+#### Human-Readable Example
+```jsonc
+{
+  "planId": "2025-09-27-1200Z",
+  "mode": "paper",              // "paper" only in Phase 1
+  "trades": [
+    {
+      "marketId": "MARKET_ID_OR_SLUG",
+      "outcome": "YES",         // "YES" | "NO"
+      "side": "BUY",            // "BUY" | "SELL"
+      "orderType": "LIMIT",     // "MARKET" | "LIMIT"
+      "price": 0.42,            // 0..1 (required for LIMIT, ignored for MARKET)
+      "size": 500               // USDC amount to spend (e.g., $500)
+    },
+    {
+      "marketId": "ANOTHER_MARKET",
+      "outcome": "NO",
+      "side": "BUY",
+      "orderType": "MARKET",    // Market order - executes at best available price
+      "size": 300               // No price field needed for MARKET orders
+    }
+  ]
+}
+```
+
+#### JSON Schema Definition
+The formal schema is available at `src/domain/schemas/trade-plan-v0.0.2.schema.json` and can be referenced in JSON files via:
+```json
+{
+  "$schema": "./src/domain/schemas/trade-plan-v0.0.2.schema.json"
+}
+```
+
+This enables editor autocomplete and validation in VSCode and other IDEs.
+
+#### TypeScript Types
+Runtime validation uses Zod schemas in `/domain/validation.ts`:
+```typescript
+import { z } from 'zod';
+
+/** Phase 1 Trade Plan Schema */
+export const TradePlanSchema = z.object({
+  /** Unique plan identifier for idempotency (prevents duplicate runs) */
+  planId: z.string().min(1),
+
+  /** Trading mode - only 'paper' supported in Phase 1 */
+  mode: z.literal("paper"),
+
+  /** Array of orders to place */
+  trades: z.array(z.object({
+    /** Polymarket market ID or slug */
+    marketId: z.string().min(1),
+
+    /** Outcome side: YES or NO */
+    outcome: z.enum(["YES", "NO"]),
+
+    /** Order side: BUY or SELL */
+    side: z.enum(["BUY", "SELL"]),
+
+    /** Order type: MARKET or LIMIT */
+    orderType: z.enum(["MARKET", "LIMIT"]),
+
+    /** Limit price as decimal probability (required for LIMIT orders) */
+    price: z.number().min(0).max(1).optional(),
+
+    /** USDC collateral amount (e.g., 500 = $500 USDC) */
+    size: z.number().positive()
+  })).min(1)
+}).refine(
+  (data) => {
+    // Validate that LIMIT orders have a price
+    return data.trades.every(
+      (trade) => trade.orderType !== "LIMIT" || trade.price !== undefined
+    );
+  },
+  { message: "LIMIT orders must specify a price" }
+);
+
+export type TradePlan = z.infer<typeof TradePlanSchema>;
+```
+
+**Phase 1 constraints:**
+- `mode`: Must be "paper" (live trading in Phase 3)
+- `side`: "BUY" or "SELL" supported
+- `orderType`: "MARKET" (immediate execution) or "LIMIT" (price-based)
+- `price`: Required for LIMIT orders, ignored for MARKET orders
+- `size`: USDC collateral amount (token quantities in Phase 2)
+- No `defaults` section
+- No `timeInForce`, `cancelAfterSec` (orders don't expire)
+- No `priceCeil`, `priceFloor` guards (Phase 4 feature)
+- No `notes` field
+
+### Phase 2+ (Full Schema)
+```jsonc
+{
+  "planId": "2025-09-27-1200Z",
+  "mode": "paper",
+  "defaults": {
+    "maxNotionalUSD": 2000,
+    "goodForSeconds": 10800     // 3h
+  },
+  "tradeInstructions": [
+    {
+      "marketId": "MARKET_ID_OR_SLUG",
+      "outcome": "YES",
+      "side": "BUY",
+      "type": "LIMIT",
+      "price": 0.42,
+      "size": 500,
+      "timeInForce": "GTT",     // Good till time
+      "cancelAfterSec": 7200,
+      "priceCeil": 0.45,        // do not buy if mid > ceil
+      "priceFloor": 0.38,       // do not sell if mid < floor
+      "notes": "enter on dip"
+    }
+  ]
+}
+```
+
+### Validation
+- Use **zod** for schemas; reject ill-formed plans with precise errors.
+- Convert between **probability ↔ price** helpers in `utils/math.ts`.
+
+---
+
+## Open Questions / TODO
+- Pin down Polymarket endpoints & auth model for Phase 3 (real trading).
+- Decide paper engine's liquidity assumptions per market category.
+- Confirm USDC decimals/allowances on Polygon and token addresses.
+- Design the Delegate Executor's on‑chain guards (venue allow‑list, caps).
+- Define reporting format for run summaries (human + JSON).
+
+
+---
+
+
+
+## Design Decisions & FAQs
+
+### Market Discovery
+**Q: How will users identify marketId values for trade plans?**
+A: Users identify marketId separately (via Polymarket UI, API, or external tools). BetterOMS does not include a market browser/search feature.
+
+**Q: Should validation accept market IDs, slugs, or both?**
+A: **Phase 1 accepts both formats.**
+- **Market IDs**: CLOB-style IDs (e.g., "0x1234567890abcdef...")
+- **Market Slugs**: Human-readable slugs (e.g., "will-donald-trump-win-2024")
+- **Parsing logic**: Distinguish between formats:
+  - If starts with "0x" or is all hex/numeric → treat as market ID
+  - Otherwise → treat as slug, resolve to market ID via Polymarket API
+- Store resolved market ID in database for consistency
+
+### Position Sizing
+**Q: Should orders be sized in USDC collateral or outcome token quantities?**
+A: **Phase 1: Use USDC collateral sizing for both BUY and SELL orders.**
+- `size: 500` means **$500 USDC worth** for both BUY and SELL orders
+- **BUY example**: `size: 500` at price 0.40 → buy $500 / 0.40 = 1250 tokens
+- **SELL example**: `size: 500` at price 0.60 → sell $500 / 0.60 = 833 tokens (must have existing position)
+- Rationale: Simpler for users ("I want to buy $500 of YES" or "I want to sell $300 worth") and matches Polymarket API flexibility
+
+**Phase 2+**: Add support for:
+- Token-quantity sizing (e.g., "buy 1000 shares")
+- Both sizing modes for BUY and SELL orders
+- Helper utilities to convert between USDC ↔ token quantities
+
+### Slippage Model
+**Q: How should Phase 1 simulate slippage?**
+A: **Zero slippage in Phase 1.**
+- Orders fill at exact best opposing price from order book
+- No price impact simulation
+- No liquidity depth analysis
+- Deterministic and predictable fills
+- **Rationale**: Simplifies Phase 1 implementation; slippage modeling added in Phase 2
+
+### Error Handling
+**Q: What happens when Polymarket APIs are down during a batch run?**
+A: **Fail fast.** Do not queue orders for retry.
+- Log error to runs table (`status: 'failed'`, `error_message`)
+- Exit with non-zero status code
+- User must manually retry by re-running the command
+
+### Concurrency
+**Q: Can multiple trade plans run simultaneously?**
+A: **Sequential execution only.** Phase 1 processes one plan at a time.
+- Single CLI invocation = one plan file
+- No concurrent execution of multiple plans
+- Phase 6 may add plan queuing/orchestration
+
+### Testing Strategy
+**Q: Should Phase 1 include automated tests?**
+A: **Light automated testing approach.**
+- Focus on core business logic (validation, fill simulation, position calculation)
+- Test critical scenarios from Test Scenarios section (6 scenarios)
+- Integration tests for database operations
+- No need for full E2E testing or comprehensive coverage in Phase 1
+- Manual testing sufficient for CLI and Polymarket API integration
+- Expand test coverage in Phase 2+
+
+### Input Method (stdin vs File)
+**Q: How should the CLI accept JSON trade plans?**
+A: **Mixed approach (file path OR stdin) using Commander.js.**
+- **File path** (primary): `pnpm run execute:trade-plan ./plans/test.json`
+- **stdin (piped)**: `cat plan.json | pnpm run execute:trade-plan` or `echo '{"planId":"test",...}' | pnpm run execute:trade-plan`
+- **stdin (heredoc)**:
+  ```bash
+  pnpm run execute:trade-plan <<EOF
+  {"planId":"test-001","mode":"paper","trades":[...]}
+  EOF
+  ```
+
+**Implementation approach using Commander.js:**
+
+**`cli.ts` (main CLI entry point):**
+```typescript
+#!/usr/bin/env node
+import 'dotenv/config';
+import { Command } from 'commander';
+import { tradeCommand } from './commands/trade.js';
+import { generateCredsCommand } from './commands/generate-creds.js';
+
+const program = new Command();
+
+program
+  .name('betteroms')
+  .description('BetterOMS - Order Management System for Polymarket')
+  .version('0.1.0');
+
+// Trade command
+program
+  .command('execute:trade-plan')
+  .description('Execute a trade plan (paper or live mode)')
+  .argument('[file-path]', 'Path to JSON trade plan file (or use stdin)')
+  .action(tradeCommand);
+
+// Generate credentials command
+program
+  .command('generate-creds')
+  .description('Generate Polymarket API credentials from private key')
+  .action(generateCredsCommand);
+
+// Phase 2+: Additional commands
+// program
+//   .command('set-allowances')
+//   .description('Approve USDC and CTF token allowances for Polymarket')
+//   .action(setAllowancesCommand);
+
+program.parse(process.argv);
+```
+
+**`commands/trade.ts` (trade command handler):**
+```typescript
+import * as fs from 'fs/promises';
+import { executeTradePlan } from '../services/core/executor.js';
+import { TradePlanSchema } from '../domain/validation.js';
+import { logger } from '../services/io/logger.js';
+
+export async function tradeCommand(filePath?: string) {
+  try {
+    // Load trade plan from file or stdin
+    const jsonContent = await loadTradePlan(filePath);
+
+    // Parse and validate JSON
+    const tradePlan = JSON.parse(jsonContent);
+    const validated = TradePlanSchema.parse(tradePlan);
+
+    // Execute trade plan
+    logger.info(`Executing trade plan: ${validated.planId}`);
+    const result = await executeTradePlan(validated);
+
+    // Display summary
+    logger.info('Trade execution completed', result);
+    process.exit(0);
+  } catch (error) {
+    logger.error('Trade execution failed', error);
+    process.exit(1);
+  }
+}
+
+async function loadTradePlan(filePath?: string): Promise<string> {
+  if (filePath) {
+    // File path provided as argument
+    return await fs.readFile(filePath, 'utf-8');
+  } else if (!process.stdin.isTTY) {
+    // stdin is piped (not a terminal)
+    return await readStdin();
+  } else {
+    // No input provided
+    throw new Error(
+      'Usage: pnpm run execute:trade-plan <file-path> OR pipe JSON via stdin\n' +
+      'Examples:\n' +
+      '  pnpm run execute:trade-plan ./plans/test.json\n' +
+      '  cat plan.json | pnpm run execute:trade-plan\n' +
+      '  echo \'{"planId":...}\' | pnpm run execute:trade-plan'
+    );
+  }
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf-8');
+}
+```
+
+
+
+
+
+
+
+
+
 ## Persistence
 
-BetterOMS uses Postgres from day 1 with Drizzle ORM (Vercel Postgres, Neon, or Supabase). Schema evolves by phase.
+BetterOMS uses Postgres with Drizzle ORM (). Schema evolves by phase.
 
 ### Core Tables (All Phases)
 
@@ -338,7 +874,7 @@ CREATE TABLE orders (
   price DECIMAL(10,4) NOT NULL,      -- 0.0000 to 1.0000
   size DECIMAL(18,6) NOT NULL,       -- USDC amount (Phase 1) or token qty (Phase 2+)
   mode VARCHAR(10) NOT NULL,         -- 'paper' | 'live'
-  status VARCHAR(20) NOT NULL,       -- 'pending' | 'open' | 'filled' | 'cancelled'
+  status VARCHAR(20) NOT NULL,       -- 'open' | 'filled' | 'cancelled'
 
   -- Phase 1 fields
   placed_at TIMESTAMP NOT NULL,
@@ -487,560 +1023,3 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
   - Executor enforces **allow‑list of venues/actions** (e.g., Polymarket CLOB) and **per‑tx caps**.
   - Permissions are **revocable**; allowances can be reduced to zero.
 - Always provide a **dry‑run preview** (paper) before enabling live mode.
-
----
-
-### Phase 1 — Paper Trading MVP (Easy→Medium)
-
-**Goal**: Validate core concept with minimal scope
-
-**Core Features:**
-- Parse & validate simplified JSON plans (6 required fields: planId, mode, tradeInstructions with marketId, outcome, side, orderType, size; price required for LIMIT orders)
-- **Paper mode only** (no live trading yet)
-- **BUY and SELL orders** supported
-- **MARKET and LIMIT order types** supported
-- Order placement for YES/NO outcomes
-- Order sizing in USDC collateral (e.g., "buy $500 of YES @ 0.42")
-- Basic fill simulation against order book snapshot
-- Persist orders, executions, runs to Postgres (3 tables)
-- Calculate P&L on-the-fly from executions (no positions table)
-- Idempotency: `planId` to avoid duplicate submissions
-- CLI invocation: `pnpm run trade <file-path>`
-- Fail-fast error handling (no retry queues)
-- Sequential execution (one plan at a time)
-
-**Deliverables:**
-- TypeScript project setup with `pnpm`
-- Environment variable configuration (`.env.local` file with optional Polymarket credentials)
-- Credential generation script: `pnpm run generate-creds`
-- JSON schema supporting BUY/SELL and MARKET/LIMIT orders (6 required fields, price conditional on orderType)
-- JSON Schema file at `/src/domain/schemas/trade-plan-v1.schema.json`
-- Zod validation for trade plans
-- Postgres database with 3 tables (orders, executions, runs)
-- Drizzle ORM setup
-- Basic paper trading engine supporting both MARKET (immediate execution) and LIMIT (price-based) orders
-- CLI entry point: `pnpm run trade <file-path>`
-- Position calculation from executions
-- Run summary output (stdout + DB)
-- Local development with Docker Compose (Postgres)
-- Documentation for credential setup (optional in Phase 1)
-
-**Constraints (Explicitly Excludes):**
-- Order cancellations and expiry
-- Price guards (ceil/floor)
-- Risk checks
-- Live trading mode
-- Automated scheduling
-- Concurrent plan execution
-- File-based input only (no S3/DB loading)
-- Manual execution (no cron)
-
-**Success Criteria:**
-- All 5 user stories implemented (US-0 through US-5)
-- All 5 test scenarios passing
-- Can run `pnpm run trade plan.json` and see results
-- Database persists orders, executions, runs correctly
-- Idempotency works (duplicate planId rejected)
-
----
-
-### Phase 2 — Paper Trading Quality (Medium)
-
-**Goal**: Enhance paper trading with advanced features and performance optimizations
-
-**Core Features:**
-- Token quantity sizing (Phase 1 uses USDC collateral only)
-- Cancel‑after (time‑based) for GTT orders
-- Position/PNL tracking with dedicated `positions` table (performance)
-- Better fill simulation with slippage modeling
-- Detailed run reports with P&L breakdown per market
-- Helper utilities: USDC ↔ token quantity conversion
-- Add `defaults` section to JSON schema (maxNotionalUSD, goodForSeconds)
-- Time expiry checking and order cleanup
-- `audit_logs` table for structured event tracking
-
-**Deliverables:**
-- `positions` table schema and repository
-- `audit_logs` table schema and repository
-- Enhanced fill simulation engine with slippage model
-- Token quantity sizing support (in addition to USDC collateral)
-- Cancel-after logic with scheduled cleanup
-- Extended JSON schema with optional fields
-- Token quantity conversion utilities
-- Detailed run report generator
-
-**Success Criteria:**
-- Token quantity sizing works correctly for both BUY and SELL orders
-- Positions table stays in sync with executions
-- Orders expire correctly based on `cancelAfter`
-- Run reports show detailed P&L breakdown
-- Audit logs capture all key events
-
----
-
-### Phase 3 — Live Trading Adapter (Hardest)
-
-**Goal**: Enable real on-chain trading via Polymarket CLOB
-
-**Core Features:**
-- Polymarket API integration (markets, orders, status)
-- Live mode execution via Polymarket CLOB
-- Wallet balance checks (USDC and outcome tokens)
-- Token approval validation (USDC + CTF)
-- Error handling and retry logic with exponential backoff
-- Idempotency for on-chain operations
-- Order status polling and reconciliation
-- External order/execution ID tracking
-- Pre-trade risk checks (balance, approvals, venue status)
-
-**Deliverables:**
-- Complete Polymarket adapter (`adapters/polymarketClient.ts`)
-  - `placeOrder()`, `cancelOrder()`, `getOrderStatus()`
-  - `getOrderBook()`, `getMarketPrice()`
-  - Error handling and retries
-- Live trading engine (`core/liveEngine.ts`)
-  - Pre-trade checks
-  - Order placement and tracking
-  - Fill reconciliation
-- Token allowances helper script (`scripts/set-allowances.ts`)
-- Database schema updates:
-  - `external_order_id` field on orders
-  - `external_execution_id` field on executions
-- Mode routing logic in executor (paper vs live)
-- Comprehensive error codes and logging
-
-**Prerequisites:**
-- Phase 2 complete (positions table and token quantity sizing required)
-- Polymarket credentials configured
-- Wallet funded with USDC on Polygon
-- Token allowances set
-
-**Success Criteria:**
-- Can place live BUY and SELL orders on Polymarket (both MARKET and LIMIT types)
-- Orders tracked correctly with external IDs
-- Fills reconciled to database accurately
-- Balance checks prevent overdrafts
-- Idempotency prevents duplicate live orders
-- Errors handled gracefully with retries
-
-### Phase 4 — Market-Making with AI Signal Tilt (Advanced)
-**Goal**: Provide liquidity on both sides of the book while skewing quotes toward AI forecasts to capture alpha + spread
-
-**Core Concept**: Instead of directional limit orders, post simultaneous BID and ASK quotes (GTC orders) with spread tilted toward BetterAI predictions. This combines market-making (earning spread) with signal-based edge (profit from forecast accuracy).
-
-**Example**:
-```
-Market mid-price: 0.50
-BetterAI forecast: 0.58 (bullish YES signal)
-Traditional MM: bid 0.49, ask 0.51 (centered, 2-cent spread)
-Tilted MM:       bid 0.52, ask 0.56 (skewed toward 0.58, 4-cent spread)
-Result: Capture spread while biasing toward predicted direction
-```
-
-**Deliverables**:
-- **Strategy engine abstraction** (not just order executor)
-  - `/src/strategies/marketMaking.ts` - Core MM strategy implementation
-  - `/src/strategies/strategyEngine.ts` - Abstract strategy runner
-- **AI signal integration**
-  - BetterAI API adapter for forecast ingestion
-  - Signal validation and staleness checks
-  - Signal-to-price conversion utilities
-- **Quote management system**
-  - Dual-sided order posting (BID + ASK simultaneously)
-  - Cancel/replace loop for quote updates
-  - Quote synchronization (ensure both sides posted atomically)
-- **Tilt calculation engine**
-  - `calculateTiltedSpread(signal, spreadBps, tiltFactor)` → { bid, ask }
-  - `calculateOptimalSpread(volatility, volume)` → spreadBps
-  - Configurable tilt factor (0 = neutral MM, 1 = full signal weight)
-- **Inventory management**
-  - Position tracking with max inventory limits
-  - Inventory-based quote skewing (reduce exposure on imbalanced side)
-  - `checkInventoryLimits(position, maxInventory)` → boolean
-- **GTC order support**
-  - Add `timeInForce` field to order schema (GTC, GTD, FOK, FAK)
-  - Track open orders per market
-  - Implement order cancellation via Polymarket API
-- **Real-time execution** (not batch-only)
-  - Continuous quote monitoring and adjustment
-  - Event-driven updates on fills or signal changes
-  - `shouldUpdateQuotes(currentBid, currentAsk, newSignal)` → boolean
-- **JSON Schema Extension**
-  ```jsonc
-  {
-    "planId": "mm-tilt-001",
-    "mode": "live",
-    "strategy": "market-making-tilt",
-    "marketMakingConfig": {
-      "marketId": "MARKET_ID",
-      "outcome": "YES",
-      "aiSignal": 0.58,           // BetterAI forecast (0-1)
-      "spreadBps": 400,            // Total spread in basis points (4%)
-      "tiltFactor": 0.6,           // Weight toward signal (0-1)
-      "maxInventory": 1000,        // Max position size (USDC)
-      "minSpread": 100,            // Minimum spread (1%)
-      "quoteSize": 500,            // Size per quote side (USDC)
-      "updateThresholdBps": 50     // Update quotes if signal moves 0.5%
-    }
-  }
-  ```
-
-**Key Implementation Details**:
-
-1. **Polymarket Order Types Used**:
-   - **GTC (Good-Til-Cancelled)**: Primary order type for market-making
-   - Post BID as GTC BUY order at tilted price
-   - Post ASK as GTC SELL order at tilted price
-   - Cancel/replace when signal or market changes
-
-2. **Order Flow**:
-   ```typescript
-   // Continuous loop
-   1. Fetch BetterAI signal
-   2. Calculate tilted bid/ask prices
-   3. Check inventory limits
-   4. Cancel existing quotes (if any)
-   5. Post new BID (GTC BUY)
-   6. Post new ASK (GTC SELL)
-   7. Monitor for fills
-   8. Update position tracking
-   9. Repeat when signal/market changes
-   ```
-
-3. **Tilt Algorithm**:
-   ```typescript
-   function calculateTiltedSpread(
-     aiSignal: number,      // 0.58
-     spreadBps: number,     // 400 (4%)
-     tiltFactor: number     // 0.6 (60% toward signal)
-   ): { bid: number, ask: number } {
-     const marketMid = getCurrentMid(); // e.g., 0.50
-     const spread = spreadBps / 10000;  // 0.04
-
-     // Tilt center point toward AI signal
-     const center = marketMid * (1 - tiltFactor) + aiSignal * tiltFactor;
-     // center = 0.50 * 0.4 + 0.58 * 0.6 = 0.548
-
-     return {
-       bid: center - spread / 2,  // 0.548 - 0.02 = 0.528
-       ask: center + spread / 2   // 0.548 + 0.02 = 0.568
-     };
-   }
-   ```
-
-4. **Inventory-Based Adjustments**:
-   - If long position grows too large → widen ask, tighten bid (encourage selling)
-   - If short position grows too large → widen bid, tighten ask (encourage buying)
-   - Halt quoting if inventory limit breached
-
-**Prerequisites**:
-- ✅ Phase 1: BUY/SELL orders with MARKET/LIMIT support
-- ✅ Phase 2: Positions table and token quantity sizing
-- ✅ Phase 3: Live trading via Polymarket CLOB
-- ❌ NEW: Strategy abstraction layer
-- ❌ NEW: Real-time execution engine (not batch)
-- ❌ NEW: External signal API integration
-- ❌ NEW: Cancel/replace order management
-- ❌ NEW: GTC order support
-
-**Success Criteria**:
-- Can post dual-sided quotes tilted toward AI signal
-- Quotes update automatically when signal changes
-- Inventory limits prevent runaway positions
-- Spread earned on fills while capturing directional alpha
-- Backtest shows improved Sharpe ratio vs directional-only
-
-**Complexity**: **Hard** (requires paradigm shift from batch executor to continuous strategy engine)
-
-**Phase 4 Notes**:
-- This transforms BetterOMS from a simple order executor into a **quant trading bot**
-- Consider building as separate module/service that uses BetterOMS as infrastructure
-- Requires robust error handling (what if one side posts but other fails?)
-- May need dedicated infrastructure (not serverless due to continuous execution)
-
----
-
----
-
-### Phase 5 — Controls & Triggers (Medium)
-
-**Goal**: Add risk controls and advanced order types
-
-**Core Features:**
-- **Price guards** (ceil/floor) at submit time
-  - Do not buy if mid > priceCeil
-  - Do not sell if mid < priceFloor
-- Simple **stop loss / take profit** logic (cancel+replace)
-- Per-run risk checks:
-  - Max notional USD per run
-  - Max number of orders per run
-  - Venue heartbeat check
-- Retry policy with exponential backoff (configurable)
-
-**Deliverables:**
-- Price guard validation in order submission
-- Stop loss/take profit trigger engine
-- Risk check framework
-- Configurable risk limits in JSON schema
-- Database fields: `price_ceil`, `price_floor` on orders
-- Enhanced error handling with retry policies
-
-**Success Criteria:**
-- Orders rejected if guards violated
-- Stop loss triggers cancel+replace correctly
-- Risk limits prevent oversized runs
-- Retries handle transient failures gracefully
-
----
-
-### Phase 6 — Security & Dashboard (Medium)
-
-**Goal**: Improve security and add monitoring UI
-
-**Core Features:**
-- **Delegated signer** smart contract on Polygon (revocable)
-  - Avoid storing raw private keys in application
-  - Spend limits and allowances
-  - Venue allow-list
-- Minimal React dashboard UI:
-  - View runs, open orders, fills
-  - Display P&L summaries
-  - Show logs and errors
-- Backtesting harness (replay historical order books)
-
-**Deliverables:**
-- Delegate Executor smart contract (Solidity)
-  - Deploy to Polygon testnet
-  - Deploy to Polygon mainnet
-- BetterOMS integration with delegated signer
-- React/Next.js dashboard application
-  - Runs list view
-  - Orders view
-  - P&L summary
-  - Logs viewer
-- Backtest runner implementation
-
-**Success Criteria:**
-- Delegated signer works for live trades
-- Dashboard displays real-time data
-- Backtest runner can replay historical scenarios
-- Security improved (no raw private keys in app)
-
----
-
-### Phase 7 — Automation (Medium)
-
-**Goal**: Enable scheduled execution and multi-plan orchestration
-
-**Core Features:**
-- Vercel Cron for scheduled execution (hourly default)
-- Multi-file loading (directory scan, S3, or DB)
-- S3/DB-backed plan storage
-- Plan activation/deactivation
-- Plan prioritization and queuing
-- Maintenance tasks (cancel-after cleanup, position sync)
-
-**Deliverables:**
-- Vercel serverless function with cron trigger
-- Multi-file loader implementation
-- S3 integration for plan storage
-- Database schema for plan management
-- Plan queue and priority system
-- Scheduled maintenance jobs
-
-**Success Criteria:**
-- Cron executes plans on schedule
-- Multiple plans processed per run
-- Plans can be managed via S3 or database
-- Maintenance tasks run automatically
-
----
-
-## Nice‑to‑Haves (Later)
-- Backtest runner that replays historical books (or mid/close prices) for plan evaluation.
-- Strategy library (e.g., “enter on dip”, “fade spike”, “mean reversion”).
-- Alerting (webhooks/Slack) on fills, breaches, or errors.
-- Multi‑plan orchestration with priorities and capital budgeting.
-
----
-
-## Polymarket API Credential Setup
-
-For detailed credential setup instructions, see [spec-credential-setup.md](spec-credential-setup.md).
-
----
-
-
-
-## JSON Input
-
-### Phase 1 (Simplified Schema)
-Minimal required fields only - no optional features, no defaults section.
-
-#### Human-Readable Example
-```jsonc
-{
-  "planId": "2025-09-27-1200Z",
-  "mode": "paper",              // "paper" only in Phase 1
-  "trades": [
-    {
-      "marketId": "MARKET_ID_OR_SLUG",
-      "outcome": "YES",         // "YES" | "NO"
-      "side": "BUY",            // "BUY" | "SELL"
-      "orderType": "LIMIT",     // "MARKET" | "LIMIT"
-      "price": 0.42,            // 0..1 (required for LIMIT, ignored for MARKET)
-      "size": 500               // USDC amount to spend (e.g., $500)
-    },
-    {
-      "marketId": "ANOTHER_MARKET",
-      "outcome": "NO",
-      "side": "BUY",
-      "orderType": "MARKET",    // Market order - executes at best available price
-      "size": 300               // No price field needed for MARKET orders
-    }
-  ]
-}
-```
-
-#### JSON Schema Definition
-The formal schema is available at [/src/domain/schemas/trade-plan-v1.schema.json](../src/domain/schemas/trade-plan-v1.schema.json) and can be referenced in JSON files via:
-```json
-{
-  "$schema": "./src/domain/schemas/trade-plan-v1.schema.json"
-}
-```
-
-This enables editor autocomplete and validation in VSCode and other IDEs.
-
-#### TypeScript Types
-Runtime validation uses Zod schemas in [/src/domain/validation.ts](../src/domain/validation.ts):
-```typescript
-import { z } from 'zod';
-
-/** Phase 1 Trade Plan Schema */
-export const TradePlanSchema = z.object({
-  /** Unique plan identifier for idempotency (prevents duplicate runs) */
-  planId: z.string().min(1),
-
-  /** Trading mode - only 'paper' supported in Phase 1 */
-  mode: z.literal("paper"),
-
-  /** Array of orders to place */
-  trades: z.array(z.object({
-    /** Polymarket market ID or slug */
-    marketId: z.string().min(1),
-
-    /** Outcome side: YES or NO */
-    outcome: z.enum(["YES", "NO"]),
-
-    /** Order side: BUY or SELL */
-    side: z.enum(["BUY", "SELL"]),
-
-    /** Order type: MARKET or LIMIT */
-    orderType: z.enum(["MARKET", "LIMIT"]),
-
-    /** Limit price as decimal probability (required for LIMIT orders) */
-    price: z.number().min(0).max(1).optional(),
-
-    /** USDC collateral amount (e.g., 500 = $500 USDC) */
-    size: z.number().positive()
-  })).min(1)
-}).refine(
-  (data) => {
-    // Validate that LIMIT orders have a price
-    return data.trades.every(
-      (trade) => trade.orderType !== "LIMIT" || trade.price !== undefined
-    );
-  },
-  { message: "LIMIT orders must specify a price" }
-);
-
-export type TradePlan = z.infer<typeof TradePlanSchema>;
-```
-
-**Phase 1 constraints:**
-- `mode`: Must be "paper" (live trading in Phase 3)
-- `side`: "BUY" or "SELL" supported
-- `orderType`: "MARKET" (immediate execution) or "LIMIT" (price-based)
-- `price`: Required for LIMIT orders, ignored for MARKET orders
-- `size`: USDC collateral amount (token quantities in Phase 2)
-- No `defaults` section
-- No `timeInForce`, `cancelAfterSec` (orders don't expire)
-- No `priceCeil`, `priceFloor` guards (Phase 4 feature)
-- No `notes` field
-
-### Phase 2+ (Full Schema)
-```jsonc
-{
-  "planId": "2025-09-27-1200Z",
-  "mode": "paper",
-  "defaults": {
-    "maxNotionalUSD": 2000,
-    "goodForSeconds": 10800     // 3h
-  },
-  "tradeInstructions": [
-    {
-      "marketId": "MARKET_ID_OR_SLUG",
-      "outcome": "YES",
-      "side": "BUY",
-      "type": "LIMIT",
-      "price": 0.42,
-      "size": 500,
-      "timeInForce": "GTT",     // Good till time
-      "cancelAfterSec": 7200,
-      "priceCeil": 0.45,        // do not buy if mid > ceil
-      "priceFloor": 0.38,       // do not sell if mid < floor
-      "notes": "enter on dip"
-    }
-  ]
-}
-```
-
-### Validation
-- Use **zod** for schemas; reject ill-formed plans with precise errors.
-- Convert between **probability ↔ price** helpers in `utils/math.ts`.
-
----
-
-## Open Questions / TODO
-- Pin down Polymarket endpoints & auth model for Phase 3 (real trading).
-- Decide paper engine's liquidity assumptions per market category.
-- Confirm USDC decimals/allowances on Polygon and token addresses.
-- Design the Delegate Executor's on‑chain guards (venue allow‑list, caps).
-- Define reporting format for run summaries (human + JSON).
-
-
----
-
-
-
-## Design Decisions & FAQs
-
-### Market Discovery
-**Q: How will users identify marketId values for trade plans?**
-A: Users identify marketId separately (via Polymarket UI, API, or external tools). BetterOMS does not include a market browser/search feature.
-
-### Position Sizing
-**Q: Should orders be sized in USDC collateral or outcome token quantities?**
-A: **Phase 1: Use USDC collateral sizing.**
-- Both BUY and SELL orders: `size` field represents USDC amount (e.g., 500 = $500 USDC)
-- Rationale: Simpler for users ("I want to buy $500 of YES" or "I want to sell $300 worth") and matches Polymarket API flexibility
-
-**Phase 2+**: Add support for:
-- Token-quantity sizing (e.g., "buy 1000 shares")
-- Both sizing modes for BUY and SELL orders
-- Helper utilities to convert between USDC ↔ token quantities
-
-### Error Handling
-**Q: What happens when Polymarket APIs are down during a batch run?**
-A: **Fail fast.** Do not queue orders for retry.
-- Log error to runs table (`status: 'failed'`, `error_message`)
-- Exit with non-zero status code
-- User must manually retry by re-running the command
-
-### Concurrency
-**Q: Can multiple trade plans run simultaneously?**
-A: **Sequential execution only.** Phase 1 processes one plan at a time.
-- Single CLI invocation = one plan file
-- No concurrent execution of multiple plans
-- Phase 6 may add plan queuing/orchestration
