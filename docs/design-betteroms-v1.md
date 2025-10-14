@@ -37,7 +37,7 @@ Future phases add price triggers, expirations, and (optional) delegated smart‑
 - CLI built with Commander.js for professional UX with help text
 - JSON validated against Phase 1 schema (src/domain/schemas/trade-plan-v0.0.2.schema.json)
 - Orders persisted to `orders` table with status 'open'
-- Run record created in `runs` table
+- Execution record created in `execution_history` table with complete trade plan JSON
 
 
 ### US-3: Track Simulated Position
@@ -56,7 +56,7 @@ Future phases add price triggers, expirations, and (optional) delegated smart‑
 **So that** I don't double my intended position
 
 **Acceptance Criteria:**
-- System checks if `planId` already exists in `runs` table
+- System checks if `planId` already exists in `execution_history` table
 - If duplicate detected, reject with clear error message
 - If new planId, proceed with execution
 
@@ -68,7 +68,7 @@ Future phases add price triggers, expirations, and (optional) delegated smart‑
 **Acceptance Criteria:**
 - After run completes, display summary to stdout
 - Summary includes: orders placed, orders filled, total P&L
-- Summary also persisted to `runs.summary_json`
+- Summary also persisted to `execution_history.summary_json`
 
 
 ### US-6 (Future): Configure Account Credentials
@@ -115,48 +115,104 @@ Future phases add price triggers, expirations, and (optional) delegated smart‑
 
 ## Example Project Layout (TypeScript)
 ```
-/config
-  env.ts
-/database
-    index.ts                    // Drizzle client (Postgres), getClient(), getdb()
-    schema.ts                // Drizzle table schemas
-/drizzle                     // meta folder and migrations folder
+/src                           ← All source code under /src
+  /cli                         ← CLI layer (thin adapters)
+    /commands
+      trade.command.ts         // Trade command handler
+      generate-creds.command.ts  // Phase 3+: credential generation
+    /utils
+      input-loader.ts          // Load JSON from file path or stdin
+      output-formatter.ts      // Format CLI output (chalk, tables)
+    cli.ts                     // CLI entry point using Commander.js
 
-/features
-  /executor
-    paper-executor.ts
-    executor-router.ts
-    executor.repo.ts        // Used to create new instances of the feature in the database
-  /trade-runner
-    trade-runner.ts
+  /features                    ← Feature-first business logic
+    /executor
+      executor.service.ts      // Core executor orchestration logic
+      paper-executor.ts        // Paper trading implementation
+      executor.repository.ts   // Data access for executor feature
+      executor.types.ts        // Executor-specific types
+    /trade-runner
+      trade-runner.service.ts  // Trade plan orchestration
+      trade-runner.repository.ts  // Data access for trade runner
+      trade-runner.types.ts    // Trade runner-specific types
+    /positions
+      position-calculator.ts   // Position aggregation logic
+      position.types.ts        // Position-specific types
 
-/domain
-  /schemas
-    /trade-plan-v0.0.2.schema.json
-/integrations
-  /polymarket
-    clob-client.ts         // Configured @polymarket/clob-client instance
-    adapter.ts             // Thin wrapper for domain-specific methods
-/utils
-  math.ts                  // odds/price conversions
-  clock.ts                 // time helpers
-  logger.ts                // structured logging using pino
-/commands
-  trade.ts                   // Trade command handler
-  generate-creds.ts          // Credential generation command
-  db-migrate.ts              // Phase 2+: database migration command
-  set-allowances.ts          // Phase 3+: token allowances command
-  inputLoader.ts           // Phase 1: load JSON from file path or stdin
-cli.ts                      // CLI entry point using Commander.js
-package.json                // scripts: betteroms, execute:trade-plan, generate-creds, dev, db:*
-.env.local                  // git-ignored secrets (never commit!)
-.env.example                // example env file with placeholders (committed)
-.gitignore                  // must include .env.local
+  /domain                      ← Business rules & validation
+    /schemas
+      trade-plan-v0.0.2.schema.json  // JSON Schema definition
+      trade-plan.schema.ts           // Zod schema with types
+    /validators
+      trade-plan.validator.ts        // Validation logic
+    /utils
+      market-id-parser.ts            // Market ID format detection
+    /errors
+      base.error.ts                  // AppError base class
+      validation.error.ts            // ValidationError extends AppError
+      execution.error.ts             // ExecutionError extends AppError
+
+  /integrations                ← External service adapters
+    /polymarket
+      clob-client.ts           // Configured @polymarket/clob-client instance
+      polymarket.adapter.ts    // Thin wrapper for domain-specific methods
+      polymarket.types.ts      // API response types
+
+  /infrastructure              ← Non-business infrastructure
+    /database
+      client.ts                // Drizzle connection (getDb())
+      schema.ts                // All table schemas (orders, executions, execution_history)
+    /logging
+      logger.ts                // Pino configuration
+
+  /config                      ← Configuration management
+    env.ts                     // Environment variables (Zod validated)
+    constants.ts               // App-wide constants
+
+  /utils                       ← Pure utility functions only
+    math.ts                    // Odds/price conversions
+    clock.ts                   // Time helpers
+
+  /shared                      ← Shared cross-cutting concerns
+    /errors
+      index.ts                 // Re-export all error types
+    /types
+      common.types.ts          // Shared types (Result<T,E>, etc.)
+
+/tests                         ← Integration & E2E tests (future)
+  /integration                 // Integration tests mirror /src structure
+  /e2e                         // End-to-end CLI tests
+  /fixtures                    // Test data and fixtures
+
+/examples                      ← Example trade plans for users
+  simple-buy.json
+  multi-trade.json
+
+/dist                          ← Compiled output (git-ignored)
+/drizzle                       ← Drizzle Kit migrations (git-ignored)
+
+drizzle.config.ts              // Drizzle ORM config
+tsconfig.json                  // TypeScript config (rootDir: ./src, outDir: ./dist)
+package.json                   // scripts: betteroms, build, dev, db:*
+.env.local                     // git-ignored secrets (never commit!)
+.env.example                   // example env file with placeholders (committed)
+.gitignore                     // must include .env.local, dist/, drizzle/
 ```
 
-Rules of thumb
-- Feature-first: put types in the feature that owns them.
-- Shared-but-small: /shared/types/… only for things feature-agnostic error shapes, and env types.
+**Rules of thumb:**
+- **Feature-first**: Types live in the feature that owns them (`executor.types.ts`)
+- **Pure utilities only**: `/utils` for stateless functions, `/infrastructure` for stateful services
+- **Domain isolation**: Business rules in `/domain`, never import from `/infrastructure` or `/cli`
+- **Repository pattern**: Each feature owns its data access (`[feature].repository.ts`)
+- **Thin CLI**: Commands delegate to feature services, no business logic
+- **Shared sparingly**: Only truly cross-cutting concerns in `/shared`
+
+**Key Benefits:**
+- ✅ All source under `/src` - clean separation from config files
+- ✅ Build output to `/dist` - standard TypeScript convention
+- ✅ Feature encapsulation - related code grouped together
+- ✅ Clear boundaries - easy to test and maintain
+- ✅ Scalable structure - easy to add new features
 
 
 **CLI Design Philosophy:**
@@ -323,17 +379,17 @@ export class PolymarketAdapter {
    - Update `.gitignore` to exclude `.env.local`
 
 4. **CLOB Client Integration**:
-   - Create `/integrations/polymarket/clob-client.ts`:
+   - Create `/src/integrations/polymarket/clob-client.ts`:
      ```typescript
      import { ClobClient } from '@polymarket/clob-client';
      export const clobClient = new ClobClient(host, chainId);
      ```
-   - Create `/integrations/polymarket/adapter.ts` with basic wrapper methods
+   - Create `/src/integrations/polymarket/polymarket.adapter.ts` with basic wrapper methods
    - Create test script: `pnpm run test:clob-client`
 
-5. **Basic Utilities**:
-   - `/utils/logger.ts` - pino structured logging
-   - `/config/env.ts` - environment variable loading with Zod validation
+5. **Basic Infrastructure & Config**:
+   - `/src/infrastructure/logging/logger.ts` - pino structured logging
+   - `/src/config/env.ts` - environment variable loading with Zod validation
 
 **Success Criteria:**
 - ✅ Project builds successfully with `pnpm build`
@@ -368,11 +424,11 @@ export class PolymarketAdapter {
    - Test connection with simple query
 
 2. **Drizzle ORM Configuration**:
-   - Create `drizzle.config.ts`
-   - Create `/database/index.ts` - connection client (`getDb()`)
+   - Create `drizzle.config.ts` (at project root)
+   - Create `/src/infrastructure/database/client.ts` - connection client (`getDb()`)
    - Setup Drizzle Kit for migrations
 
-3. **Schema Definition** (`/database/schema.ts`):
+3. **Schema Definition** (`/src/infrastructure/database/schema.ts`):
    - **orders table**:
      ```typescript
      id, plan_id, market_id, outcome, side, order_type,
@@ -382,9 +438,9 @@ export class PolymarketAdapter {
      ```typescript
      id, order_id, quantity, price, executed_at
      ```
-   - **runs table**:
+   - **execution_history table**:
      ```typescript
-     plan_id (PK), status, source, started_at,
+     plan_id (PK), plan_json (JSONB), status, started_at,
      completed_at, summary_json, error_message
      ```
 
@@ -392,18 +448,16 @@ export class PolymarketAdapter {
    - Generate initial migration: `pnpm drizzle-kit generate`
    - Apply migration: `pnpm drizzle-kit migrate`
    - Create `package.json` scripts: `db:generate`, `db:migrate`, `db:studio`
+   - Migrations stored in `/drizzle` directory (git-ignored)
 
-5. **Repository Pattern** (optional but recommended):
-   - `/database/repositories/orders.repo.ts` - CRUD for orders
-   - `/database/repositories/executions.repo.ts` - CRUD for executions
-   - `/database/repositories/runs.repo.ts` - CRUD for runs
+**Note on Repositories**: Data access logic will be added in Phase 5 within feature folders (e.g., `/src/features/executor/executor.repository.ts`). Phase 2 focuses only on database connection and schema.
 
 **Success Criteria:**
 - ✅ Database connection works (`pnpm db:studio` opens Drizzle Studio)
 - ✅ All 3 tables created with correct schema
 - ✅ Can insert/query sample data for each table
 - ✅ Migrations run successfully
-- ✅ Repository methods work (if implemented)
+- ✅ Can import and use `getDb()` from other modules
 
 **Excluded from Phase 2:**
 - CLI commands
@@ -424,17 +478,17 @@ export class PolymarketAdapter {
 
 **Deliverables:**
 
-1. **Commander.js Setup** (`/cli.ts`):
+1. **Commander.js Setup** (`/src/cli/cli.ts`):
    - Initialize Commander with version and description
    - Setup help text and usage examples
    - Error handling for invalid commands
 
-2. **Commands Directory Structure**:
-   - `/commands/inputLoader.ts` - load JSON from file or stdin
-   - `/commands/trade.ts` - `execute:trade-plan` command handler (stub)
-   - Future: `/commands/generate-creds.ts` (placeholder)
+2. **CLI Directory Structure**:
+   - `/src/cli/utils/input-loader.ts` - load JSON from file or stdin
+   - `/src/cli/commands/trade.command.ts` - `execute:trade-plan` command handler (stub)
+   - Future: `/src/cli/commands/generate-creds.command.ts` (placeholder)
 
-3. **Input Loader**:
+3. **Input Loader** (`/src/cli/utils/input-loader.ts`):
    ```typescript
    // Supports:
    // 1. File path: pnpm run execute:trade-plan ./plan.json
@@ -447,14 +501,16 @@ export class PolymarketAdapter {
    ```json
    {
      "scripts": {
-       "betteroms": "tsx cli.ts",
-       "execute:trade-plan": "tsx cli.ts execute:trade-plan"
+       "betteroms": "tsx src/cli/cli.ts",
+       "execute:trade-plan": "tsx src/cli/cli.ts execute:trade-plan",
+       "build": "tsc",
+       "dev": "tsx watch src/cli/cli.ts"
      }
    }
    ```
 
-5. **Basic Command Handler**:
-   - Load input via `inputLoader`
+5. **Basic Command Handler** (`trade.command.ts`):
+   - Load input via `input-loader`
    - Parse JSON
    - Log parsed data (no validation yet)
    - Exit with status code
@@ -486,7 +542,7 @@ export class PolymarketAdapter {
 
 **Deliverables:**
 
-1. **JSON Schema** (`/domain/schemas/trade-plan-v0.0.2.schema.json`):
+1. **JSON Schema** (`/src/domain/schemas/trade-plan-v0.0.2.schema.json`):
    ```json
    {
      "type": "object",
@@ -512,17 +568,17 @@ export class PolymarketAdapter {
    }
    ```
 
-2. **Zod Schema** (`/domain/schemas/trade-plan.schema.ts`):
+2. **Zod Schema** (`/src/domain/schemas/trade-plan.schema.ts`):
    - Mirror JSON schema in Zod
    - Conditional validation: `price` required only if `orderType === "LIMIT"`
    - Export TypeScript types: `TradePlan`, `Trade`
 
-3. **Validation Module** (`/domain/validators/trade-plan.validator.ts`):
+3. **Validation Module** (`/src/domain/validators/trade-plan.validator.ts`):
    - `validateTradePlan(json: unknown): TradePlan | ValidationError`
    - Detailed error messages for each validation failure
    - Market ID format detection (hex vs slug)
 
-4. **Market ID Parsing** (`/domain/utils/market-id-parser.ts`):
+4. **Market ID Parsing** (`/src/domain/utils/market-id-parser.ts`):
    ```typescript
    function parseMarketId(input: string): {
      type: 'id' | 'slug',
@@ -532,7 +588,7 @@ export class PolymarketAdapter {
    ```
 
 5. **Integration with CLI**:
-   - Update `trade.ts` to validate input before proceeding
+   - Update `/src/cli/commands/trade.command.ts` to validate input before proceeding
    - Return clear validation errors to user
    - Log validation failures
 
@@ -564,9 +620,10 @@ export class PolymarketAdapter {
 **Deliverables:**
 
 1. **Executor Architecture**:
-   - `/features/executor/executor-router.ts` - routes to paper vs live executor
-   - `/features/executor/paper-executor.ts` - paper trading implementation
-   - `/features/executor/executor.repo.ts` - database operations
+   - `/src/features/executor/executor.service.ts` - routes to paper vs live executor
+   - `/src/features/executor/paper-executor.ts` - paper trading implementation
+   - `/src/features/executor/executor.repository.ts` - database operations (CRUD for orders/executions)
+   - `/src/features/executor/executor.types.ts` - executor-specific types
 
 2. **Fill Simulator** (`paper-executor.ts`):
    ```typescript
@@ -594,7 +651,7 @@ export class PolymarketAdapter {
    - Calculate net position: `SUM(quantity WHERE side='BUY') - SUM(quantity WHERE side='SELL')`
    - Error if no position exists or insufficient quantity
 
-4. **Position Calculator** (`/features/positions/position-calculator.ts`):
+4. **Position Calculator** (`/src/features/positions/position-calculator.ts`):
    ```typescript
    async function calculatePosition(marketId: string, outcome: string): Promise<Position> {
      // Query executions table
@@ -610,7 +667,7 @@ export class PolymarketAdapter {
    - All within transaction
 
 6. **Integration**:
-   - Wire executor into `trade.ts` command handler
+   - Wire executor service into `/src/cli/commands/trade.command.ts` handler
    - Execute all trades in plan sequentially
    - Handle errors gracefully (fail-fast)
 
@@ -650,22 +707,25 @@ export class PolymarketAdapter {
 
 **Deliverables:**
 
-1. **Trade Runner** (`/features/trade-runner/trade-runner.ts`):
+1. **Trade Runner Service**:
+   - `/src/features/trade-runner/trade-runner.service.ts` - orchestration logic:
    ```typescript
    async function executeTradePlan(plan: TradePlan): Promise<RunSummary> {
-     // 1. Check idempotency (planId exists in runs?)
-     // 2. Create run record (status: 'running')
+     // 1. Check idempotency (planId exists in execution_history?)
+     // 2. Create execution_history record with plan_json (status: 'running')
      // 3. Execute each trade via executor
      // 4. Calculate final positions and P&L
-     // 5. Update run record (status: 'completed', summary_json)
+     // 5. Update execution_history record (status: 'completed', summary_json)
      // 6. Return summary
    }
    ```
+   - `/src/features/trade-runner/trade-runner.repository.ts` - data access for execution_history table
+   - `/src/features/trade-runner/trade-runner.types.ts` - RunSummary and related types
 
 2. **Idempotency Check** (US-4):
-   - Query `runs` table for existing `planId`
+   - Query `execution_history` table for existing `planId`
    - If exists, reject with clear error: "Plan already executed"
-   - If new, proceed with execution
+   - If new, proceed with execution and store complete `plan_json`
 
 3. **Run Summary Generation** (US-5):
    ```typescript
@@ -680,11 +740,11 @@ export class PolymarketAdapter {
    ```
    - Calculate total P&L across all executions
    - List final positions (market + outcome + quantity)
-   - Store in `runs.summary_json`
+   - Store in `execution_history.summary_json`
 
 4. **Output Formatting**:
    - **stdout**: Human-readable summary with colors (use `chalk` or similar)
-   - **database**: Full JSON summary in `runs.summary_json`
+   - **database**: Full JSON summary in `execution_history.summary_json`
    - Example output:
      ```
      ✓ Trade Plan: test-001
@@ -700,7 +760,7 @@ export class PolymarketAdapter {
 5. **Error Handling**:
    - Catch errors at each stage (validation, execution, persistence)
    - Log errors with pino
-   - Store in `runs.error_message` if run fails
+   - Store in `execution_history.error_message` if run fails
    - Exit with non-zero status code on failure
    - Rollback transactions on error
 
@@ -774,7 +834,7 @@ Expected result:
 After Phase 6, you will have:
 - ✅ Working CLI for paper trading
 - ✅ CLOB client integration for market data
-- ✅ Database persistence for orders, executions, runs
+- ✅ Database persistence for orders, executions, execution_history
 - ✅ Trade plan validation (JSON + Zod)
 - ✅ MARKET order execution (BUY/SELL)
 - ✅ Position calculation and P&L
@@ -905,7 +965,7 @@ A: **Zero slippage in Phase 1.**
 ### Error Handling
 **Q: What happens when Polymarket APIs are down during a batch run?**
 A: **Fail fast.** Do not queue orders for retry.
-- Log error to runs table (`status: 'failed'`, `error_message`)
+- Log error to execution_history table (`status: 'failed'`, `error_message`)
 - Exit with non-zero status code
 - User must manually retry by re-running the command
 
@@ -956,14 +1016,20 @@ Tracks all order lifecycle from submission to completion.
 **Purpose**: Central record of every trading order, capturing intent and current state.
 
 **Key responsibilities**:
-- Links orders to their originating trade plan via `plan_id`
+- Links orders to their originating trade plan execution via `plan_id`
 - Identifies the market and outcome (YES/NO) being traded
 - Stores order parameters: side (BUY/SELL), price, size (USDC collateral)
 - Tracks execution mode (paper vs live) and current status (open/filled/cancelled)
 - Records placement timestamp for order sequencing and auditing
 
+**Data model relationship**:
+- `orders.plan_id` → `execution_history.plan_id` (foreign key, many-to-one)
+- Each order belongs to exactly one plan execution
+
 **Phase-specific fields**:
 - Phase 1: Basic order tracking with status transitions
+
+**Indexes**: Optimized for queries by plan_id, market+status combinations.
 
 
 #### executions
@@ -977,6 +1043,11 @@ Records all fills (partial or complete) for order tracking and P&L calculation.
 - Records execution timestamp for chronological sequencing
 - Supports both paper (simulated) and live (on-chain) execution modes
 
+**Data model relationship**:
+- `executions.order_id` → `orders.id` (foreign key, many-to-one)
+- Each execution belongs to exactly one order
+- One order may have multiple executions (partial fills)
+
 **Phase-specific fields**:
 - Phase 1-2: Basic fill tracking for simulated trades
 - Phase 3+: Adds `external_execution_id` to map to Polymarket CLOB fill IDs for reconciliation
@@ -986,7 +1057,7 @@ Records all fills (partial or complete) for order tracking and P&L calculation.
 - Phase 2+ uses this table to update the dedicated positions table
 - Critical for P&L reporting and audit trails
 
-**Indexes**: Optimized for queries by order and execution time.
+**Indexes**: Optimized for queries by order_id and execution time.
 
 #### execution_history
 Audit trail of trade plan executions with complete context.
