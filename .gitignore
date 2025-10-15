@@ -1,17 +1,31 @@
-# env files
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
 .env
 .env.local
 .env.production
 
-# vercel
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vercel
 .vercel
 
-# typescript
+# TypeScript
 *.tsbuildinfo
 
-
-# ds store
+# OS
 .DS_Store
 /public/.DS_Store
 **/.DS_Store
-
+Thumbs.db

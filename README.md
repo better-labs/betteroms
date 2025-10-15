@@ -62,3 +62,52 @@ BetterOMS addresses these by:
 ## Docs
 
 Please see the /docs folder for more information.
+
+## Phase 1 Quickstart
+
+1. **Install dependencies**
+   ```bash
+   pnpm install
+   ```
+2. **Configure environment**
+   ```bash
+   cp .env.example .env.local
+   # Edit .env.local and set DATABASE_URL to your Postgres connection string
+   ```
+3. **Run a trade plan**
+   ```bash
+   pnpm run execute:trade-plan ./plans/sample-plan.json
+   ```
+   or pipe JSON directly:
+   ```bash
+   cat plans/sample-plan.json | pnpm run execute:trade-plan
+   ```
+4. **Check results** – the CLI prints a JSON summary and persists run/order/execution rows to Postgres.
+
+### Sample Plan Structure
+
+```jsonc
+{
+  "planId": "2024-09-20T10-00Z",
+  "mode": "paper",
+  "trades": [
+    {
+      "marketId": "will-trump-win-2024",
+      "outcome": "YES",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 500
+    },
+    {
+      "marketId": "will-trump-win-2024",
+      "outcome": "YES",
+      "side": "SELL",
+      "orderType": "LIMIT",
+      "price": 0.62,
+      "size": 200
+    }
+  ]
+}
+```
+
+Run `pnpm test` to execute lightweight unit tests covering the paper trading engine and the deterministic order book stub.
