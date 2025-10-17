@@ -114,10 +114,60 @@ pnpm build
 # Output will be in ./dist directory
 ```
 
+## Phase 2 Setup (Complete ✅)
+
+Phase 2 establishes the data persistence layer with Postgres and Drizzle ORM.
+
+### Prerequisites
+- Postgres database (we're using Supabase)
+- DATABASE_URL configured in `.env.local`
+
+### Database Commands
+
+```bash
+# Generate migrations (after schema changes)
+pnpm db:generate
+
+# Apply migrations to database
+pnpm db:migrate
+
+# Open Drizzle Studio (database GUI)
+pnpm db:studio
+
+# Test database connectivity
+pnpm run test:database
+```
+
+### Run Phase 2 Test
+
+```bash
+pnpm run test:database
+```
+
+This test verifies:
+- ✅ Database connection works
+- ✅ All 3 tables created (execution_history, orders, executions)
+- ✅ Can insert and query data
+- ✅ Foreign key relationships work correctly
+- ✅ Cascade delete behavior works
+
+### Database Schema
+
+**execution_history**: Tracks trade plan executions with complete audit trail
+- Stores complete trade plan JSON for replay capability
+- Uses plan_id as PK for idempotency
+
+**orders**: Tracks all orders from submission to completion
+- Links to execution_history via plan_id (cascade delete)
+- Supports MARKET and LIMIT orders (Phase 5+)
+
+**executions**: Immutable log of all order fills
+- Links to orders via order_id (cascade delete)
+- Foundation for position and P&L calculations
+
 ## Next Steps
 
-Phase 1 is complete! The following phases will add:
-- **Phase 2**: Database persistence (Postgres + Drizzle ORM)
+Phases 1 & 2 are complete! The following phases will add:
 - **Phase 3**: CLI commands and input handling
 - **Phase 4**: Trade plan validation
 - **Phase 5**: Paper trading engine
