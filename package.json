@@ -1,0 +1,42 @@
+{
+  "name": "betteroms",
+  "version": "0.1.0",
+  "description": "Single-user order management system for Polymarket on Polygon",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/cli/cli.ts",
+    "build": "tsc",
+    "start": "node dist/cli/cli.js",
+    "betteroms": "tsx src/cli/cli.ts",
+    "execute:trade-plan": "tsx src/cli/cli.ts execute:trade-plan",
+    "test:clob-client": "tsx src/test-clob-client.ts",
+    "test:database": "tsx src/test-database.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "keywords": [
+    "polymarket",
+    "trading",
+    "oms"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@polymarket/clob-client": "^4.22.7",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.36.4",
+    "ethers": "^5.7.2",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "postgres": "^3.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "drizzle-kit": "^0.29.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

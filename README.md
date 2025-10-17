@@ -63,51 +63,62 @@ BetterOMS addresses these by:
 
 Please see the /docs folder for more information.
 
-## Phase 1 Quickstart
+## Phase 1 Setup (Complete ✅)
+
+Phase 1 establishes the project foundation and validates Polymarket CLOB client integration.
+
+### Prerequisites
+- Node.js 18+ and pnpm
+- No database required for Phase 1
+
+### Setup Steps
 
 1. **Install dependencies**
    ```bash
    pnpm install
    ```
+
 2. **Configure environment**
    ```bash
-   cp .env.example .env.local
-   # Edit .env.local and set DATABASE_URL to your Postgres connection string
+   # .env.local is already created with defaults
+   # No changes needed for Phase 1 (read-only API access)
    ```
-3. **Run a trade plan**
-   ```bash
-   pnpm run execute:trade-plan ./plans/sample-plan.json
-   ```
-   or pipe JSON directly:
-   ```bash
-   cat plans/sample-plan.json | pnpm run execute:trade-plan
-   ```
-4. **Check results** – the CLI prints a JSON summary and persists run/order/execution rows to Postgres.
 
-### Sample Plan Structure
+3. **Run Phase 1 test**
+   ```bash
+   pnpm run test:clob-client
+   ```
 
-```jsonc
-{
-  "planId": "2024-09-20T10-00Z",
-  "mode": "paper",
-  "trades": [
-    {
-      "marketId": "will-trump-win-2024",
-      "outcome": "YES",
-      "side": "BUY",
-      "orderType": "MARKET",
-      "size": 500
-    },
-    {
-      "marketId": "will-trump-win-2024",
-      "outcome": "YES",
-      "side": "SELL",
-      "orderType": "LIMIT",
-      "price": 0.62,
-      "size": 200
-    }
-  ]
-}
+   This test verifies:
+   - ✅ Environment variables load correctly
+   - ✅ Logger outputs structured JSON logs
+   - ✅ CLOB client initializes successfully
+   - ✅ Can fetch market data from Polymarket API
+   - ✅ All adapter methods work (getOrderBook, getMidPoint, getLastTradePrice, getSpread)
+
+### Expected Output
+
+The test will output structured JSON logs showing:
+- Environment configuration loaded
+- CLOB client initialized
+- Market data fetched from Polymarket (orderbook, prices, spreads)
+
+**Note**: Some test token IDs may be inactive and return 404 errors. This is expected. The important part is that the API calls work and return proper responses.
+
+### Build Project
+
+```bash
+# Compile TypeScript to JavaScript
+pnpm build
+
+# Output will be in ./dist directory
 ```
 
-Run `pnpm test` to execute lightweight unit tests covering the paper trading engine and the deterministic order book stub.
+## Next Steps
+
+Phase 1 is complete! The following phases will add:
+- **Phase 2**: Database persistence (Postgres + Drizzle ORM)
+- **Phase 3**: CLI commands and input handling
+- **Phase 4**: Trade plan validation
+- **Phase 5**: Paper trading engine
+- **Phase 6**: End-to-end integration and orchestration
