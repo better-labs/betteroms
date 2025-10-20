@@ -16,3 +16,6 @@ BetterOMS is a lightweight, single-user order management system (OMS) for Polyma
 - **Deployment**: Vercel serverless functions
 - **Local Dev**: Docker Compose for Postgres
 
+
+## Drizzle ORM Database Best Practice
+- Only use proper generate and migrate commands. Do not attempt to use db:push to shortcut any problems with the database configuration.

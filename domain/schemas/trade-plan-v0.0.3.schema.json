@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "trade-plan-v0.0.3.schema.json",
+  "version": "0.0.3",
+  "title": "BetterOMS Trade Plan (Phase 1)",
+  "description": "Trade plan schema for Phase 1 paper trading on Polymarket with support for buy/sell and market/limit orders",
+  "type": "object",
+  "required": ["schemaVersion", "planId", "mode", "trades"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "0.0.3",
+      "description": "Schema version this trade plan adheres to. Must be '0.0.3' for this schema.",
+      "examples": ["0.0.3"]
+    },
+    "planId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for this trade plan (idempotency key). Prevents duplicate execution of the same plan.",
+      "examples": ["2025-09-27-1200Z", "test-001", "my-trade-plan-123"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["paper", "live"],
+      "description": "Trading mode. Phase 1 only supports 'paper' (simulated trading). Live trading will be added in Phase 3."
+    },
+    "marketUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional URL pointing to the prediction market page on Polymarket",
+      "examples": ["https://polymarket.com/event/will-trump-win-2024"]
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional notes to describe the trade plan, strategy, or rationale",
+      "examples": ["Hedging strategy for election outcomes", "Testing limit order behavior"]
+    },
+    "trades": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Array of orders to execute in this trade plan (market or limit orders)",
+      "items": {
+        "type": "object",
+        "required": ["marketId", "outcome", "side", "orderType", "size"],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "orderType": { "const": "LIMIT" }
+              }
+            },
+            "then": {
+              "required": ["price"]
+            }
+          }
+        ],
+        "properties": {
+          "marketId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Polymarket market identifier (market ID or slug)",
+            "examples": ["0x1234567890abcdef", "will-trump-win-2024"]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["YES", "NO"],
+            "description": "Outcome side to trade: YES or NO"
+          },
+          "side": {
+            "type": "string",
+            "enum": ["BUY", "SELL"],
+            "description": "Order side: BUY to purchase shares, SELL to sell shares you own"
+          },
+          "orderType": {
+            "type": "string",
+            "enum": ["MARKET", "LIMIT"],
+            "description": "Order type: MARKET executes immediately at best available price, LIMIT only executes at specified price or better"
+          },
+          "price": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Limit price expressed as decimal probability. Required for LIMIT orders, ignored for MARKET orders. Example: 0.42 means 42% probability (buy/sell at 42 cents per share)",
+            "examples": [0.42, 0.55, 0.33]
+          },
+          "size": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": 0,
+            "description": "USDC collateral amount to spend on this order. Example: 500 means spend $500 USDC",
+            "examples": [100, 500, 1000]
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schemaVersion": "0.0.3",
+      "planId": "2025-09-27-1200Z",
+      "mode": "paper",
+      "marketUrl": "https://polymarket.com/event/2024-presidential-election",
+      "notes": "Election hedging strategy - buying Trump YES and Biden NO positions",
+      "trades": [
+        {
+          "marketId": "will-trump-win-2024",
+          "outcome": "YES",
+          "side": "BUY",
+          "orderType": "LIMIT",
+          "price": 0.42,
+          "size": 500
+        },
+        {
+          "marketId": "will-biden-win-2024",
+          "outcome": "NO",
+          "side": "BUY",
+          "orderType": "MARKET",
+          "size": 300
+        },
+        {
+          "marketId": "will-harris-win-2024",
+          "outcome": "YES",
+          "side": "SELL",
+          "orderType": "LIMIT",
+          "price": 0.75,
+          "size": 200
+        }
+      ]
+    }
+  ]
+}

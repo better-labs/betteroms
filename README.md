@@ -63,51 +63,162 @@ BetterOMS addresses these by:
 
 Please see the /docs folder for more information.
 
-## Phase 1 Quickstart
+## Phase 1 Setup (Complete ✅)
+
+Phase 1 establishes the project foundation and validates Polymarket CLOB client integration.
+
+### Prerequisites
+- Node.js 18+ and pnpm
+- No database required for Phase 1
+
+### Setup Steps
 
 1. **Install dependencies**
    ```bash
    pnpm install
    ```
+
 2. **Configure environment**
    ```bash
-   cp .env.example .env.local
-   # Edit .env.local and set DATABASE_URL to your Postgres connection string
+   # .env.local is already created with defaults
+   # No changes needed for Phase 1 (read-only API access)
    ```
-3. **Run a trade plan**
-   ```bash
-   pnpm run execute:trade-plan ./plans/sample-plan.json
-   ```
-   or pipe JSON directly:
-   ```bash
-   cat plans/sample-plan.json | pnpm run execute:trade-plan
-   ```
-4. **Check results** – the CLI prints a JSON summary and persists run/order/execution rows to Postgres.
 
-### Sample Plan Structure
+3. **Run Phase 1 test**
+   ```bash
+   pnpm run test:clob-client
+   ```
 
-```jsonc
-{
-  "planId": "2024-09-20T10-00Z",
-  "mode": "paper",
-  "trades": [
-    {
-      "marketId": "will-trump-win-2024",
-      "outcome": "YES",
-      "side": "BUY",
-      "orderType": "MARKET",
-      "size": 500
-    },
-    {
-      "marketId": "will-trump-win-2024",
-      "outcome": "YES",
-      "side": "SELL",
-      "orderType": "LIMIT",
-      "price": 0.62,
-      "size": 200
-    }
-  ]
-}
+   This test verifies:
+   - ✅ Environment variables load correctly
+   - ✅ Logger outputs structured JSON logs
+   - ✅ CLOB client initializes successfully
+   - ✅ Can fetch market data from Polymarket API
+   - ✅ All adapter methods work (getOrderBook, getMidPoint, getLastTradePrice, getSpread)
+
+### Expected Output
+
+The test will output structured JSON logs showing:
+- Environment configuration loaded
+- CLOB client initialized
+- Market data fetched from Polymarket (orderbook, prices, spreads)
+
+**Note**: Some test token IDs may be inactive and return 404 errors. This is expected. The important part is that the API calls work and return proper responses.
+
+### Build Project
+
+```bash
+# Compile TypeScript to JavaScript
+pnpm build
+
+# Output will be in ./dist directory
 ```
 
-Run `pnpm test` to execute lightweight unit tests covering the paper trading engine and the deterministic order book stub.
+## Phase 2 Setup (Complete ✅)
+
+Phase 2 establishes the data persistence layer with Postgres and Drizzle ORM.
+
+### Prerequisites
+- Postgres database (we're using Supabase)
+- DATABASE_URL configured in `.env.local`
+
+### Database Commands
+
+```bash
+# Generate migrations (after schema changes)
+pnpm db:generate
+
+# Apply migrations to database
+pnpm db:migrate
+
+# Open Drizzle Studio (database GUI)
+pnpm db:studio
+
+# Test database connectivity
+pnpm run test:database
+```
+
+### Run Phase 2 Test
+
+```bash
+pnpm run test:database
+```
+
+This test verifies:
+- ✅ Database connection works
+- ✅ All 3 tables created (execution_history, orders, executions)
+- ✅ Can insert and query data
+- ✅ Foreign key relationships work correctly
+- ✅ Cascade delete behavior works
+
+### Database Schema
+
+**execution_history**: Tracks trade plan executions with complete audit trail
+- Stores complete trade plan JSON for replay capability
+- Uses plan_id as PK for idempotency
+
+**orders**: Tracks all orders from submission to completion
+- Links to execution_history via plan_id (cascade delete)
+- Supports MARKET and LIMIT orders (Phase 5+)
+
+**executions**: Immutable log of all order fills
+- Links to orders via order_id (cascade delete)
+- Foundation for position and P&L calculations
+
+## Phase 3 Setup (Complete ✅)
+
+Phase 3 establishes the CLI framework with Commander.js and flexible input handling.
+
+### CLI Commands
+
+```bash
+# Show help
+pnpm run betteroms --help
+
+# Show command-specific help
+pnpm run betteroms execute:trade-plan --help
+
+# Execute trade plan from file
+pnpm run execute:trade-plan ./test/trade-plans/simple-buy.json
+
+# Execute from stdin (pipe)
+cat ./test/trade-plans/simple-buy.json | pnpm run execute:trade-plan
+
+# Execute from stdin (heredoc)
+pnpm run execute:trade-plan <<EOF
+{
+  "planId": "test-001",
+  "mode": "paper",
+  "trades": [...]
+}
+EOF
+```
+
+### Supported Input Methods
+
+1. **File Path**: Provide path to JSON file as argument
+2. **Stdin (Pipe)**: Pipe JSON content to command
+3. **Stdin (Heredoc)**: Use heredoc syntax for inline JSON
+
+### Current Behavior (Phase 3)
+
+The CLI currently:
+- ✅ Loads and parses trade plan JSON
+- ✅ Validates basic structure (planId, mode, trades)
+- ✅ Displays trade plan summary
+- ⏸️  Full validation will be added in Phase 4
+- ⏸️  Execution logic will be added in Phase 5
+
+### Test Trade Plans
+
+Sample trade plans are available in `/test/trade-plans/`:
+- `simple-buy.json` - Single MARKET BUY order
+- `multi-trade.json` - Multiple orders (BUY and SELL)
+- `invalid.json` - Invalid plan for error testing
+
+## Next Steps
+
+Phases 1, 2 & 3 are complete! The following phases will add:
+- **Phase 4**: Trade plan validation (Zod schemas, detailed validation)
+- **Phase 5**: Paper trading engine (MARKET order simulation)
+- **Phase 6**: End-to-end integration and orchestration
