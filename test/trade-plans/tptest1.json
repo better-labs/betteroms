@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "0.0.3",
+  "planId": "prediction-1830c9bf-51c9-455c-8536-5e2aa9d62013-1760734412952",
+  "mode": "paper",
+  "marketUrl": "https://polymarket.com/event/fed-decision-in-october/fed-decreases-interest-rates-by-25-bps-after-october-2025-meeting?tid=1760734233892",
+  "notes": "Fed rate decision trade: Entry - Buy NO at market 0.055 (AI predicts YES overpriced at 0.945 vs 0.900, confidence: 78%). Take profit - Sell NO at target 0.073 (39.0% toward inverse AI target 0.100, confidence: 78%)",
+  "trades": [
+    {
+      "marketId": "553811",
+      "outcome": "NO",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 1
+    },
+    {
+      "marketId": "553811",
+      "outcome": "NO",
+      "side": "SELL",
+      "orderType": "LIMIT",
+      "size": 1,
+      "price": 0.07255000000000002
+    }
+  ]
+}

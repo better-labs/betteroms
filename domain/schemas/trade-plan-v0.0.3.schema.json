@@ -5,9 +5,15 @@
   "title": "BetterOMS Trade Plan (Phase 1)",
   "description": "Trade plan schema for Phase 1 paper trading on Polymarket with support for buy/sell and market/limit orders",
   "type": "object",
-  "required": ["planId", "mode", "trades"],
+  "required": ["schemaVersion", "planId", "mode", "trades"],
   "additionalProperties": false,
   "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "0.0.3",
+      "description": "Schema version this trade plan adheres to. Must be '0.0.3' for this schema.",
+      "examples": ["0.0.3"]
+    },
     "planId": {
       "type": "string",
       "minLength": 1,
@@ -94,6 +100,7 @@
   },
   "examples": [
     {
+      "schemaVersion": "0.0.3",
       "planId": "2025-09-27-1200Z",
       "mode": "paper",
       "marketUrl": "https://polymarket.com/event/2024-presidential-election",
