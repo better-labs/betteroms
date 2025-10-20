@@ -165,10 +165,60 @@ This test verifies:
 - Links to orders via order_id (cascade delete)
 - Foundation for position and P&L calculations
 
+## Phase 3 Setup (Complete ✅)
+
+Phase 3 establishes the CLI framework with Commander.js and flexible input handling.
+
+### CLI Commands
+
+```bash
+# Show help
+pnpm run betteroms --help
+
+# Show command-specific help
+pnpm run betteroms execute:trade-plan --help
+
+# Execute trade plan from file
+pnpm run execute:trade-plan ./test/trade-plans/simple-buy.json
+
+# Execute from stdin (pipe)
+cat ./test/trade-plans/simple-buy.json | pnpm run execute:trade-plan
+
+# Execute from stdin (heredoc)
+pnpm run execute:trade-plan <<EOF
+{
+  "planId": "test-001",
+  "mode": "paper",
+  "trades": [...]
+}
+EOF
+```
+
+### Supported Input Methods
+
+1. **File Path**: Provide path to JSON file as argument
+2. **Stdin (Pipe)**: Pipe JSON content to command
+3. **Stdin (Heredoc)**: Use heredoc syntax for inline JSON
+
+### Current Behavior (Phase 3)
+
+The CLI currently:
+- ✅ Loads and parses trade plan JSON
+- ✅ Validates basic structure (planId, mode, trades)
+- ✅ Displays trade plan summary
+- ⏸️  Full validation will be added in Phase 4
+- ⏸️  Execution logic will be added in Phase 5
+
+### Test Trade Plans
+
+Sample trade plans are available in `/test/trade-plans/`:
+- `simple-buy.json` - Single MARKET BUY order
+- `multi-trade.json` - Multiple orders (BUY and SELL)
+- `invalid.json` - Invalid plan for error testing
+
 ## Next Steps
 
-Phases 1 & 2 are complete! The following phases will add:
-- **Phase 3**: CLI commands and input handling
-- **Phase 4**: Trade plan validation
-- **Phase 5**: Paper trading engine
+Phases 1, 2 & 3 are complete! The following phases will add:
+- **Phase 4**: Trade plan validation (Zod schemas, detailed validation)
+- **Phase 5**: Paper trading engine (MARKET order simulation)
 - **Phase 6**: End-to-end integration and orchestration
