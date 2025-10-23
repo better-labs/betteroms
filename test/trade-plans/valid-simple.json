@@ -1,0 +1,13 @@
+{
+  "planId": "test-valid-001",
+  "mode": "paper",
+  "trades": [
+    {
+      "marketId": "0x1234567890abcdef1234567890abcdef12345678",
+      "outcome": "YES",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 100
+    }
+  ]
+}

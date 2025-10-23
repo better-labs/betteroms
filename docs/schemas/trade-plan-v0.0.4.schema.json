@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/wesfloyd/betteroms/schemas/trade-plan-v0.0.4.schema.json",
+  "title": "BetterOMS Trade Plan",
+  "description": "Trade plan schema for BetterOMS vv0.0.4 - single-user order management system for Polymarket",
+  "version": "v0.0.4",
+  "$ref": "#/definitions/TradePlan",
+  "definitions": {
+    "TradePlan": {
+      "type": "object",
+      "properties": {
+        "planId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9-_]+$",
+          "description": "Unique identifier for this trade plan execution (used for idempotency)"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "paper",
+            "live"
+          ],
+          "description": "Execution mode: 'paper' for simulation, 'live' for real trading"
+        },
+        "trades": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "marketId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Market identifier (hex ID starting with 0x or human-readable slug)"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "YES",
+                  "NO"
+                ],
+                "description": "Outcome to trade: YES or NO"
+              },
+              "side": {
+                "type": "string",
+                "enum": [
+                  "BUY",
+                  "SELL"
+                ],
+                "description": "Order side: BUY to acquire position, SELL to reduce position"
+              },
+              "orderType": {
+                "type": "string",
+                "enum": [
+                  "MARKET",
+                  "LIMIT"
+                ],
+                "description": "Order type: MARKET for immediate execution, LIMIT for specified price"
+              },
+              "size": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Order size in USDC collateral (e.g., 100 = $100 worth)"
+              },
+              "price": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 1,
+                "description": "Limit price (required for LIMIT orders, ignored for MARKET orders)"
+              }
+            },
+            "required": [
+              "marketId",
+              "outcome",
+              "side",
+              "orderType",
+              "size"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "description": "List of trades to execute in this plan"
+        }
+      },
+      "required": [
+        "planId",
+        "mode",
+        "trades"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

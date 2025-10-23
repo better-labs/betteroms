@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/wesfloyd/betteroms/main/docs/schemas/trade-plan-v0.0.4.schema.json",
+  "planId": "example-with-autocomplete",
+  "mode": "paper",
+  "trades": [
+    {
+      "marketId": "0x1234567890abcdef1234567890abcdef12345678",
+      "outcome": "YES",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 100
+    }
+  ]
+}
