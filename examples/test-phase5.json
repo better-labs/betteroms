@@ -1,0 +1,22 @@
+{
+  "$schema": "../docs/schemas/trade-plan-v0.0.4.schema.json",
+  "planId": "prediction-001103d7-894c-4477-a1f8-f3d7271e4178-1761592274373",
+  "mode": "paper",
+  "trades": [
+    {
+      "marketId": "525410",
+      "outcome": "NO",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 1
+    },
+    {
+      "marketId": "525410",
+      "outcome": "NO",
+      "side": "SELL",
+      "orderType": "LIMIT",
+      "size": 1,
+      "price": 0.317
+    }
+  ]
+}
