@@ -1,0 +1,13 @@
+{
+  "planId": "simple-buy-001",
+  "mode": "paper",
+  "trades": [
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "NO",
+      "side": "SELL",
+      "orderType": "MARKET",
+      "size": 1
+    }
+  ]
+}

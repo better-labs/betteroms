@@ -334,7 +334,7 @@ export class PolymarketAdapter {
 
 ---
 
-## Phase 1 — Foundation & External Dependencies
+## Phase 1 — Foundation & External Dependencies ✅ COMPLETE
 
 **Goal**: Establish project foundation and validate Polymarket CLOB client integration works
 
@@ -408,7 +408,7 @@ export class PolymarketAdapter {
 
 ---
 
-## Phase 2 — Data Persistence Layer
+## Phase 2 — Data Persistence Layer ✅ COMPLETE
 
 **Goal**: Setup database and schema for orders, executions, and runs
 
@@ -468,7 +468,7 @@ export class PolymarketAdapter {
 
 ---
 
-## Phase 3 — CLI Framework & Input Handling
+## Phase 3 — CLI Framework & Input Handling ✅ COMPLETE
 
 **Goal**: Build CLI structure with input loading (file path and stdin support)
 
@@ -532,7 +532,7 @@ export class PolymarketAdapter {
 
 ---
 
-## Phase 4 — Trade Plan Validation
+## Phase 4 — Trade Plan Validation ✅ COMPLETE
 
 **Goal**: Implement JSON schema and Zod validation for trade plans
 
@@ -553,10 +553,9 @@ export class PolymarketAdapter {
        "trades": {
          "type": "array",
          "items": {
-           "required": ["marketId", "outcome", "side", "orderType", "size"],
+           "required": ["marketTokenId", "side", "orderType", "size"],
            "properties": {
-             "marketId": { "type": "string" },
-             "outcome": { "enum": ["YES", "NO"] },
+             "marketTokenId": { "type": "string" },
              "side": { "enum": ["BUY", "SELL"] },
              "orderType": { "enum": ["MARKET", "LIMIT"] },
              "size": { "type": "number", "minimum": 0 },
@@ -578,7 +577,7 @@ export class PolymarketAdapter {
    - Detailed error messages for each validation failure
    - Market ID format detection (hex vs slug)
 
-4. **Market ID Parsing** (`/src/domain/utils/market-id-parser.ts`):
+4. **Market Token ID Validation** (`/src/domain/utils/market-token-id-validator.ts`):
    ```typescript
    function parseMarketId(input: string): {
      type: 'id' | 'slug',
@@ -628,7 +627,7 @@ export class PolymarketAdapter {
 2. **Fill Simulator** (`paper-executor.ts`):
    ```typescript
    async function simulateFill(trade: Trade): Promise<Execution> {
-     const orderBook = await adapter.getOrderBook(trade.marketId);
+     const orderBook = await adapter.getOrderBook(trade.marketTokenId);
 
      // Determine fill price
      const fillPrice = trade.side === 'BUY'
@@ -653,7 +652,7 @@ export class PolymarketAdapter {
 
 4. **Position Calculator** (`/src/features/positions/position-calculator.ts`):
    ```typescript
-   async function calculatePosition(marketId: string, outcome: string): Promise<Position> {
+   async function calculatePosition(marketTokenId: string): Promise<Position> {
      // Query executions table
      // Aggregate BUYs and SELLs
      // Return { netQuantity, avgPrice, unrealizedPnL }
@@ -691,7 +690,7 @@ export class PolymarketAdapter {
 2. Multiple BUY orders in sequence - should create multiple executions
 3. BUY followed by SELL - SELL should succeed
 4. SELL without position - should fail with error
-5. Invalid market ID - should fail gracefully
+5. Invalid marketTokenId - should fail gracefully
 
 **Estimated Effort**: 5-7 hours
 
@@ -706,6 +705,7 @@ export class PolymarketAdapter {
 **Prerequisites**: Phase 5 complete (can execute trades)
 
 **Deliverables:**
+0. Add separate note fields to trade plan schema. Notes at the individual trade level and notes at the trade plan level, both optional.
 
 1. **Trade Runner Service**:
    - `/src/features/trade-runner/trade-runner.service.ts` - orchestration logic:
@@ -794,15 +794,13 @@ Create and execute this trade plan:
   "mode": "paper",
   "trades": [
     {
-      "marketId": "0x...",
-      "outcome": "YES",
+      "marketTokenId": "0x...",
       "side": "BUY",
       "orderType": "MARKET",
       "size": 100
     },
     {
-      "marketId": "0x...",
-      "outcome": "YES",
+      "marketTokenId": "0x...",
       "side": "SELL",
       "orderType": "MARKET",
       "size": 50
@@ -928,17 +926,16 @@ co-locate types with the feature that uses them
 Avoid a giant global /types dump—except for a tiny /shared (or @types) for truly cross-cutting stuff.
 
 ### Market Discovery
-**Q: How will users identify marketId values for trade plans?**
-A: Users identify marketId separately (via Polymarket UI, API, or external tools). BetterOMS does not include a market browser/search feature.
+**Q: How will users identify marketTokenId values for trade plans?**
+A: Users identify marketTokenId separately (via Polymarket UI, API, or external tools). BetterOMS does not include a market browser/search feature.
 
-**Q: Should validation accept market IDs, slugs, or both?**
-A: **Phase 1 accepts both formats.**
-- **Market IDs**: CLOB-style IDs (e.g., "0x1234567890abcdef...")
-- **Market Slugs**: Human-readable slugs (e.g., "will-donald-trump-win-2024")
-- **Parsing logic**: Distinguish between formats:
-  - If starts with "0x" or is all hex/numeric → treat as market ID
-  - Otherwise → treat as slug, resolve to market ID via Polymarket API
-- Store resolved market ID in database for consistency
+**Note on terminology**: In Polymarket's API, what we call `marketTokenId` in trade plans refers to the **token ID** for a specific outcome (YES or NO) within a market. This is sometimes called the CLOB token ID.
+
+**Q: Should validation accept market token IDs, slugs, or both?**
+A: **Phase 1 accepts token ID format only.**
+- **Market Token IDs**: CLOB-style token IDs (e.g., "0x1234567890abcdef...")
+- Future phases may add slug support with resolution to token IDs
+- Store marketTokenId in database as provided
 
 ### Position Sizing
 **Q: Should orders be sized in USDC collateral or outcome token quantities?**
@@ -1141,7 +1138,7 @@ Pre-computed position tracking for performance. Phase 1 calculates on-the-fly fr
 
 **MARKET orders** (Phase 1):
 ```typescript
-const orderBook = await clobClient.getOrderBook(marketId);
+const orderBook = await clobClient.getOrderBook(marketTokenId);
 const fillPrice = side === 'BUY'
   ? orderBook.asks[0].price  // Buy at best ask
   : orderBook.bids[0].price; // Sell at best bid
@@ -1154,7 +1151,7 @@ const fillPrice = side === 'BUY'
 - Fill immediately if executable, otherwise remain open
 
 **SELL order validation**:
-- Query executions table for existing position in market+outcome
+- Query executions table for existing position for the marketTokenId
 - Error if no position exists (Phase 1 does not support short positions)
 
 **Slippage model (Phase 1)**:
