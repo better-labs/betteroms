@@ -1,13 +1,16 @@
 import { z } from 'zod';
 
 /**
- * Trade Plan Schema v0.0.4
+ * Trade Plan Schema v0.0.5
  *
  * This is the single source of truth for trade plan validation.
  * JSON Schema is auto-generated from this Zod schema.
+ *
+ * v0.0.5 changes:
+ * - Renamed marketId to marketTokenId for clarity (token ID is required, not market ID)
  */
 
-export const TRADE_PLAN_SCHEMA_VERSION = 'v0.0.4';
+export const TRADE_PLAN_SCHEMA_VERSION = 'v0.0.5';
 
 // Enum schemas
 export const OutcomeSchema = z.enum(['YES', 'NO'], {
@@ -29,10 +32,10 @@ export const ModeSchema = z.enum(['paper', 'live'], {
 // Trade schema with conditional validation
 export const TradeSchema = z
   .object({
-    marketId: z
+    marketTokenId: z
       .string()
-      .min(1, 'Market ID is required and cannot be empty')
-      .describe('Market identifier (hex ID starting with 0x or human-readable slug)'),
+      .min(1, 'Market token ID is required and cannot be empty')
+      .describe('Polymarket token ID (ERC1155 token ID for the specific market outcome). This is the long numeric ID used by the CLOB API, not the market ID or slug.'),
 
     outcome: OutcomeSchema.describe('Outcome to trade: YES or NO'),
 

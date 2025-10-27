@@ -63,7 +63,7 @@ export const orders = pgTable(
       .references(() => executionHistory.planId, { onDelete: 'cascade' }),
 
     // Market identification
-    marketId: text('market_id').notNull(), // Polymarket market/token ID
+    marketTokenId: text('market_token_id').notNull(), // Polymarket ERC1155 token ID for specific outcome
     outcome: text('outcome', { enum: ['YES', 'NO'] }).notNull(),
 
     // Order parameters
@@ -90,7 +90,7 @@ export const orders = pgTable(
     // Indexes for common queries
     planIdIdx: index('orders_plan_id_idx').on(table.planId),
     marketStatusIdx: index('orders_market_status_idx').on(
-      table.marketId,
+      table.marketTokenId,
       table.status
     ),
     statusIdx: index('orders_status_idx').on(table.status),

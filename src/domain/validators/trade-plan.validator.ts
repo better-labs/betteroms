@@ -60,21 +60,21 @@ function validateMarketIds(plan: TradePlan): void {
 
   plan.trades.forEach((trade, index) => {
     try {
-      const validationResult = validateMarketIdFormat(trade.marketId);
+      const validationResult = validateMarketIdFormat(trade.marketTokenId);
 
       if (validationResult !== true) {
         errors.push({
-          field: `trades[${index}].marketId`,
+          field: `trades[${index}].marketTokenId`,
           message: validationResult,
           code: 'invalid_market_id',
         });
       } else {
         // Log the parsed market ID type for debugging
-        const parsed = parseMarketId(trade.marketId);
+        const parsed = parseMarketId(trade.marketTokenId);
         logger.debug(
           {
             tradeIndex: index,
-            marketId: trade.marketId,
+            marketTokenId: trade.marketTokenId,
             marketIdType: parsed.type,
           },
           'Market ID validated'
@@ -82,7 +82,7 @@ function validateMarketIds(plan: TradePlan): void {
       }
     } catch (error) {
       errors.push({
-        field: `trades[${index}].marketId`,
+        field: `trades[${index}].marketTokenId`,
         message: error instanceof Error ? error.message : 'Invalid market ID format',
         code: 'invalid_market_id',
       });
