@@ -63,7 +63,7 @@ export async function executeTradePlan(filePath?: string): Promise<void> {
       const trade = result.trade;
 
       console.log(`Trade ${i + 1}:`);
-      console.log(`  Market: ${trade.marketId}`);
+      console.log(`  Market Token: ${trade.marketTokenId}`);
       console.log(`  ${trade.side} ${trade.outcome} @ ${trade.orderType}`);
       console.log(`  Size: $${trade.size} USDC`);
       console.log(`  Fill Price: ${result.fillPrice.toFixed(4)}`);
