@@ -1,0 +1,13 @@
+{
+  "planId": "test-invalid-004",
+  "mode": "paper",
+  "trades": [
+    {
+      "marketId": "Invalid Market ID With Spaces!",
+      "outcome": "YES",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 100
+    }
+  ]
+}
