@@ -334,7 +334,7 @@ export class PolymarketAdapter {
 
 ---
 
-## Phase 1 — Foundation & External Dependencies
+## Phase 1 — Foundation & External Dependencies ✅ COMPLETE
 
 **Goal**: Establish project foundation and validate Polymarket CLOB client integration works
 
@@ -408,7 +408,7 @@ export class PolymarketAdapter {
 
 ---
 
-## Phase 2 — Data Persistence Layer
+## Phase 2 — Data Persistence Layer ✅ COMPLETE
 
 **Goal**: Setup database and schema for orders, executions, and runs
 
@@ -468,7 +468,7 @@ export class PolymarketAdapter {
 
 ---
 
-## Phase 3 — CLI Framework & Input Handling
+## Phase 3 — CLI Framework & Input Handling ✅ COMPLETE
 
 **Goal**: Build CLI structure with input loading (file path and stdin support)
 
@@ -532,7 +532,7 @@ export class PolymarketAdapter {
 
 ---
 
-## Phase 4 — Trade Plan Validation
+## Phase 4 — Trade Plan Validation ✅ COMPLETE
 
 **Goal**: Implement JSON schema and Zod validation for trade plans
 
@@ -553,10 +553,9 @@ export class PolymarketAdapter {
        "trades": {
          "type": "array",
          "items": {
-           "required": ["marketId", "outcome", "side", "orderType", "size"],
+           "required": ["marketTokenId", "side", "orderType", "size"],
            "properties": {
-             "marketId": { "type": "string" },
-             "outcome": { "enum": ["YES", "NO"] },
+             "marketTokenId": { "type": "string" },
              "side": { "enum": ["BUY", "SELL"] },
              "orderType": { "enum": ["MARKET", "LIMIT"] },
              "size": { "type": "number", "minimum": 0 },
@@ -578,7 +577,7 @@ export class PolymarketAdapter {
    - Detailed error messages for each validation failure
    - Market ID format detection (hex vs slug)
 
-4. **Market ID Parsing** (`/src/domain/utils/market-id-parser.ts`):
+4. **Market Token ID Validation** (`/src/domain/utils/market-token-id-validator.ts`):
    ```typescript
    function parseMarketId(input: string): {
      type: 'id' | 'slug',
@@ -628,7 +627,7 @@ export class PolymarketAdapter {
 2. **Fill Simulator** (`paper-executor.ts`):
    ```typescript
    async function simulateFill(trade: Trade): Promise<Execution> {
-     const orderBook = await adapter.getOrderBook(trade.marketId);
+     const orderBook = await adapter.getOrderBook(trade.marketTokenId);
 
      // Determine fill price
      const fillPrice = trade.side === 'BUY'
@@ -653,7 +652,7 @@ export class PolymarketAdapter {
 
 4. **Position Calculator** (`/src/features/positions/position-calculator.ts`):
    ```typescript
-   async function calculatePosition(marketId: string, outcome: string): Promise<Position> {
+   async function calculatePosition(marketTokenId: string): Promise<Position> {
      // Query executions table
      // Aggregate BUYs and SELLs
      // Return { netQuantity, avgPrice, unrealizedPnL }
@@ -691,7 +690,7 @@ export class PolymarketAdapter {
 2. Multiple BUY orders in sequence - should create multiple executions
 3. BUY followed by SELL - SELL should succeed
 4. SELL without position - should fail with error
-5. Invalid market ID - should fail gracefully
+5. Invalid marketTokenId - should fail gracefully
 
 **Estimated Effort**: 5-7 hours
 
@@ -706,6 +705,7 @@ export class PolymarketAdapter {
 **Prerequisites**: Phase 5 complete (can execute trades)
 
 **Deliverables:**
+0. Add separate note fields to trade plan schema. Notes at the individual trade level and notes at the trade plan level, both optional.
 
 1. **Trade Runner Service**:
    - `/src/features/trade-runner/trade-runner.service.ts` - orchestration logic:
@@ -794,15 +794,13 @@ Create and execute this trade plan:
   "mode": "paper",
   "trades": [
     {
-      "marketId": "0x...",
-      "outcome": "YES",
+      "marketTokenId": "0x...",
       "side": "BUY",
       "orderType": "MARKET",
       "size": 100
     },
     {
-      "marketId": "0x...",
-      "outcome": "YES",
+      "marketTokenId": "0x...",
       "side": "SELL",
       "orderType": "MARKET",
       "size": 50
@@ -826,6 +824,215 @@ Expected result:
 - Risk checks and price guards
 
 **Estimated Effort**: 4-6 hours
+
+---
+
+## Phase 7 — LIMIT Order Support
+
+**Goal**: Add LIMIT order execution with order book crossing logic and price validation
+
+**Why this phase?** Enables more sophisticated trading strategies with price control, building on the solid MARKET order foundation from Phase 5-6.
+
+**Prerequisites**: Phase 6 complete (orchestration and idempotency working)
+
+**Deliverables:**
+
+1. **LIMIT Order Fill Simulation** (`paper-executor.ts`):
+   ```typescript
+   async function simulateLimitOrderFill(trade: Trade): Promise<FillSimulation | null> {
+     const orderBook = await adapter.getOrderBook(trade.marketTokenId);
+
+     // BUY LIMIT: Only fill if limit price >= best ask (willing to pay more)
+     // SELL LIMIT: Only fill if limit price <= best bid (willing to accept less)
+
+     if (trade.side === 'BUY') {
+       const bestAsk = parseFloat(orderBook.asks[0].price);
+       if (trade.price! >= bestAsk) {
+         // Order crosses spread - fill at best ask (favorable execution)
+         return { fillPrice: bestAsk, quantity: trade.size / bestAsk, executedAt: new Date() };
+       }
+       // Order does not cross - return null (order stays open)
+       return null;
+     } else {
+       const bestBid = parseFloat(orderBook.bids[0].price);
+       if (trade.price! <= bestBid) {
+         // Order crosses spread - fill at best bid (favorable execution)
+         return { fillPrice: bestBid, quantity: trade.size / bestBid, executedAt: new Date() };
+       }
+       // Order stays open
+       return null;
+     }
+   }
+   ```
+
+2. **Order Status Handling**:
+   - MARKET orders: Always fill immediately (current behavior)
+   - LIMIT orders that cross spread: Fill immediately at best opposing price
+   - LIMIT orders that don't cross: Create order with `status: 'open'`, no execution record
+   - Update executor transaction logic to support orders without immediate fills
+
+3. **Database Updates**:
+   - Modify `executeTradeTransaction()` to handle optional execution (LIMIT orders may not fill)
+   - Add support for creating orders without executions
+   - Ensure price field is properly stored for LIMIT orders
+
+4. **Trade Runner Integration**:
+   - Update run summary to distinguish between orders placed vs filled
+   - Track unfilled LIMIT orders separately
+   - Display open orders in run summary output
+
+5. **CLI Output Enhancement**:
+   - Show LIMIT order status: "Filled" vs "Open"
+   - Display limit price and current market price for open orders
+   - Example:
+     ```
+     📊 Run Summary:
+       Orders Placed: 3
+       Orders Filled: 2
+       Orders Open: 1 (LIMIT order waiting for price)
+
+     📝 Open Orders:
+       - Market Token: 0x... / YES
+         Side: BUY, Limit Price: 0.35, Best Ask: 0.40
+         Status: Open (waiting for price to reach 0.35)
+     ```
+
+6. **Validation Enhancements**:
+   - Ensure price is provided for LIMIT orders (already enforced in schema)
+   - Validate price is within valid range (0 < price < 1)
+   - Add helpful error message if LIMIT order price would never fill (e.g., BUY limit below best bid)
+
+7. **Testing**:
+   - Test LIMIT order that crosses spread (immediate fill)
+   - Test LIMIT order that doesn't cross (stays open)
+   - Test BUY LIMIT above market (should fill immediately)
+   - Test BUY LIMIT below market (should stay open)
+   - Test SELL LIMIT below market (should fill immediately)
+   - Test SELL LIMIT above market (should stay open)
+   - Test position calculations with mix of filled/open orders
+
+**Success Criteria:**
+- ✅ LIMIT orders that cross spread fill immediately at best opposing price
+- ✅ LIMIT orders that don't cross create order record with `status: 'open'`
+- ✅ No execution record created for unfilled LIMIT orders
+- ✅ Run summary accurately reports filled vs open orders
+- ✅ CLI displays clear status for LIMIT orders
+- ✅ Schema validation ensures price is required for LIMIT orders
+- ✅ Position calculations exclude unfilled orders
+- ✅ All existing MARKET order tests still pass
+
+**Phase 7 Key Considerations:**
+
+**1. Order Book Crossing Logic:**
+- LIMIT orders are "maker" orders that add liquidity at specified price
+- In paper trading, we simulate immediate fill if order would cross spread
+- BUY LIMIT at $0.50 with best ask at $0.45 → fills at $0.45 (better price)
+- SELL LIMIT at $0.40 with best bid at $0.45 → fills at $0.45 (better price)
+- Orders that don't cross remain open (Phase 7 does not implement fill polling)
+
+**2. Open Order Management:**
+- Phase 7 creates open orders but does NOT implement:
+  - Order cancellation (Phase 10)
+  - Order modification (Phase 10)
+  - Periodic fill checking (Phase 8 with scheduling)
+  - Order expiration (future phase)
+- Open orders persist indefinitely until manually cancelled
+
+**3. Slippage Model:**
+- Maintain zero slippage model from Phase 5
+- LIMIT orders that cross fill at best opposing price (no worse)
+- No liquidity depth analysis or price impact simulation
+
+**4. P&L Calculation:**
+- Only filled orders contribute to positions and P&L
+- Open orders are excluded from position calculations
+- Run summary should clarify: "Realized P&L from filled orders only"
+
+**Excluded from Phase 7:**
+- Order cancellation/modification (Phase 10)
+- Automated fill checking for open orders (requires Phase 8 scheduling)
+- Order expiration/time-in-force (future phase)
+- Partial fills (all-or-nothing in Phase 7)
+- Price guards or sanity checks beyond schema validation
+- Live trading LIMIT orders (Phase 9)
+
+**Test Scenarios:**
+
+1. **LIMIT Buy Above Market** (Immediate Fill)
+   ```json
+   {
+     "planId": "limit-test-001",
+     "mode": "paper",
+     "trades": [{
+       "marketTokenId": "0x...",
+       "outcome": "YES",
+       "side": "BUY",
+       "orderType": "LIMIT",
+       "size": 100,
+       "price": 0.60
+     }]
+   }
+   ```
+   Expected: If best ask is 0.55, order fills immediately at 0.55
+
+2. **LIMIT Buy Below Market** (Stays Open)
+   ```json
+   {
+     "planId": "limit-test-002",
+     "mode": "paper",
+     "trades": [{
+       "marketTokenId": "0x...",
+       "outcome": "YES",
+       "side": "BUY",
+       "orderType": "LIMIT",
+       "size": 100,
+       "price": 0.40
+     }]
+   }
+   ```
+   Expected: If best ask is 0.55, order stays open (no fill)
+
+3. **Mixed Order Types**
+   ```json
+   {
+     "planId": "limit-test-003",
+     "mode": "paper",
+     "trades": [
+       {
+         "marketTokenId": "0x...",
+         "outcome": "YES",
+         "side": "BUY",
+         "orderType": "MARKET",
+         "size": 100
+       },
+       {
+         "marketTokenId": "0x...",
+         "outcome": "YES",
+         "side": "SELL",
+         "orderType": "LIMIT",
+         "size": 50,
+         "price": 0.70
+       }
+     ]
+   }
+   ```
+   Expected: MARKET fills immediately, LIMIT stays open if price not met
+
+**Estimated Effort**: 4-6 hours
+
+**Breakdown:**
+- LIMIT fill simulation logic: 1.5 hours
+- Database transaction updates: 1 hour
+- CLI output enhancements: 1 hour
+- Testing (6 test scenarios): 1.5 hours
+- Documentation updates: 0.5 hours
+
+**Post-Phase 7 State:**
+- LIMIT orders can be placed and will fill if price crosses spread
+- Open LIMIT orders tracked in database but not actively managed
+- User can see open orders in run summary
+- Position calculations correctly exclude unfilled orders
+- Foundation ready for Phase 8 (scheduling) to add periodic fill checks
 
 ---
 
@@ -928,17 +1135,16 @@ co-locate types with the feature that uses them
 Avoid a giant global /types dump—except for a tiny /shared (or @types) for truly cross-cutting stuff.
 
 ### Market Discovery
-**Q: How will users identify marketId values for trade plans?**
-A: Users identify marketId separately (via Polymarket UI, API, or external tools). BetterOMS does not include a market browser/search feature.
+**Q: How will users identify marketTokenId values for trade plans?**
+A: Users identify marketTokenId separately (via Polymarket UI, API, or external tools). BetterOMS does not include a market browser/search feature.
 
-**Q: Should validation accept market IDs, slugs, or both?**
-A: **Phase 1 accepts both formats.**
-- **Market IDs**: CLOB-style IDs (e.g., "0x1234567890abcdef...")
-- **Market Slugs**: Human-readable slugs (e.g., "will-donald-trump-win-2024")
-- **Parsing logic**: Distinguish between formats:
-  - If starts with "0x" or is all hex/numeric → treat as market ID
-  - Otherwise → treat as slug, resolve to market ID via Polymarket API
-- Store resolved market ID in database for consistency
+**Note on terminology**: In Polymarket's API, what we call `marketTokenId` in trade plans refers to the **token ID** for a specific outcome (YES or NO) within a market. This is sometimes called the CLOB token ID.
+
+**Q: Should validation accept market token IDs, slugs, or both?**
+A: **Phase 1 accepts token ID format only.**
+- **Market Token IDs**: CLOB-style token IDs (e.g., "0x1234567890abcdef...")
+- Future phases may add slug support with resolution to token IDs
+- Store marketTokenId in database as provided
 
 ### Position Sizing
 **Q: Should orders be sized in USDC collateral or outcome token quantities?**
@@ -1141,7 +1347,7 @@ Pre-computed position tracking for performance. Phase 1 calculates on-the-fly fr
 
 **MARKET orders** (Phase 1):
 ```typescript
-const orderBook = await clobClient.getOrderBook(marketId);
+const orderBook = await clobClient.getOrderBook(marketTokenId);
 const fillPrice = side === 'BUY'
   ? orderBook.asks[0].price  // Buy at best ask
   : orderBook.bids[0].price; // Sell at best bid
@@ -1154,7 +1360,7 @@ const fillPrice = side === 'BUY'
 - Fill immediately if executable, otherwise remain open
 
 **SELL order validation**:
-- Query executions table for existing position in market+outcome
+- Query executions table for existing position for the marketTokenId
 - Error if no position exists (Phase 1 does not support short positions)
 
 **Slippage model (Phase 1)**:

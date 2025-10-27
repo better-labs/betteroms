@@ -1,0 +1,15 @@
+{
+  "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.6.schema.json",
+  "planId": "simple-buy-001",
+  "mode": "paper",
+  "notes": "Simple SELL order test (requires existing position)",
+  "trades": [
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "NO",
+      "side": "SELL",
+      "orderType": "MARKET",
+      "size": 1
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.6.schema.json",
+  "planId": "prediction-17affb21-f11a-47de-b4e8-46780e0fbd36-1761594229384",
+  "mode": "paper",
+  "notes": "Take profit (overpriced): AI predicts YES at 0.680 but market is 0.685. Buy opposite outcome NO at 0.315, sell at 0.317 (31.0% toward AI target 0.320, confidence-based). Expected edge: 0.2%",
+  "trades": [
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "NO",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 1
+    },
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "NO",
+      "side": "SELL",
+      "orderType": "LIMIT",
+      "size": 1,
+      "price": 0.31654999999999994
+    }
+  ]
+}

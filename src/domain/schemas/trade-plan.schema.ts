@@ -1,10 +1,13 @@
 import { z } from 'zod';
 
 /**
- * Trade Plan Schema v0.0.6
+ * Trade Plan Schema v0.0.7
  *
  * This is the single source of truth for trade plan validation.
  * JSON Schema is auto-generated from this Zod schema.
+ *
+ * v0.0.7 changes:
+ * - Added optional notes field at trade level for individual trade documentation
  *
  * v0.0.6 changes:
  * - Added optional notes field for documenting trade rationale
@@ -13,7 +16,7 @@ import { z } from 'zod';
  * - Renamed marketId to marketTokenId for clarity (token ID is required, not market ID)
  */
 
-export const TRADE_PLAN_SCHEMA_VERSION = 'v0.0.6';
+export const TRADE_PLAN_SCHEMA_VERSION = 'v0.0.7';
 
 // Enum schemas
 export const OutcomeSchema = z.enum(['YES', 'NO'], {
@@ -57,6 +60,11 @@ export const TradeSchema = z
       .lt(1, 'Price must be less than 1')
       .optional()
       .describe('Limit price (required for LIMIT orders, ignored for MARKET orders)'),
+
+    notes: z
+      .string()
+      .optional()
+      .describe('Optional notes about this specific trade'),
   })
   .refine(
     (data) => {

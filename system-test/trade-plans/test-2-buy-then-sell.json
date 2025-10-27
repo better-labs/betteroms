@@ -1,0 +1,22 @@
+{
+  "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.6.schema.json",
+  "planId": "test-2-buy-then-sell-001",
+  "mode": "paper",
+  "notes": "Phase 5 Test: BUY followed by SELL to verify position tracking and validation",
+  "trades": [
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "NO",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 20
+    },
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "NO",
+      "side": "SELL",
+      "orderType": "MARKET",
+      "size": 10
+    }
+  ]
+}
