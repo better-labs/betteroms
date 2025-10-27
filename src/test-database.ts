@@ -59,7 +59,7 @@ async function runTests() {
           mode: 'paper',
           trades: [
             {
-              marketId: 'test-market-123',
+              marketTokenId: 'test-market-123',
               outcome: 'YES',
               side: 'BUY',
               orderType: 'MARKET',
@@ -82,7 +82,7 @@ async function runTests() {
       .insert(orders)
       .values({
         planId: TEST_PLAN_ID,
-        marketId: 'test-market-123',
+        marketTokenId: 'test-market-123',
         outcome: 'YES',
         side: 'BUY',
         orderType: 'MARKET',
