@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/wesfloyd/betteroms/main/docs/schemas/trade-plan-v0.0.7.schema.json",
+  "planId": "phase6-test-001",
+  "mode": "paper",
+  "notes": "Phase 6 Test 1: First execution of a plan should succeed",
+  "trades": [
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "NO",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 10,
+      "notes": "Initial BUY order to establish position"
+    }
+  ]
+}

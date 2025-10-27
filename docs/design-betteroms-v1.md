@@ -827,6 +827,215 @@ Expected result:
 
 ---
 
+## Phase 7 — LIMIT Order Support
+
+**Goal**: Add LIMIT order execution with order book crossing logic and price validation
+
+**Why this phase?** Enables more sophisticated trading strategies with price control, building on the solid MARKET order foundation from Phase 5-6.
+
+**Prerequisites**: Phase 6 complete (orchestration and idempotency working)
+
+**Deliverables:**
+
+1. **LIMIT Order Fill Simulation** (`paper-executor.ts`):
+   ```typescript
+   async function simulateLimitOrderFill(trade: Trade): Promise<FillSimulation | null> {
+     const orderBook = await adapter.getOrderBook(trade.marketTokenId);
+
+     // BUY LIMIT: Only fill if limit price >= best ask (willing to pay more)
+     // SELL LIMIT: Only fill if limit price <= best bid (willing to accept less)
+
+     if (trade.side === 'BUY') {
+       const bestAsk = parseFloat(orderBook.asks[0].price);
+       if (trade.price! >= bestAsk) {
+         // Order crosses spread - fill at best ask (favorable execution)
+         return { fillPrice: bestAsk, quantity: trade.size / bestAsk, executedAt: new Date() };
+       }
+       // Order does not cross - return null (order stays open)
+       return null;
+     } else {
+       const bestBid = parseFloat(orderBook.bids[0].price);
+       if (trade.price! <= bestBid) {
+         // Order crosses spread - fill at best bid (favorable execution)
+         return { fillPrice: bestBid, quantity: trade.size / bestBid, executedAt: new Date() };
+       }
+       // Order stays open
+       return null;
+     }
+   }
+   ```
+
+2. **Order Status Handling**:
+   - MARKET orders: Always fill immediately (current behavior)
+   - LIMIT orders that cross spread: Fill immediately at best opposing price
+   - LIMIT orders that don't cross: Create order with `status: 'open'`, no execution record
+   - Update executor transaction logic to support orders without immediate fills
+
+3. **Database Updates**:
+   - Modify `executeTradeTransaction()` to handle optional execution (LIMIT orders may not fill)
+   - Add support for creating orders without executions
+   - Ensure price field is properly stored for LIMIT orders
+
+4. **Trade Runner Integration**:
+   - Update run summary to distinguish between orders placed vs filled
+   - Track unfilled LIMIT orders separately
+   - Display open orders in run summary output
+
+5. **CLI Output Enhancement**:
+   - Show LIMIT order status: "Filled" vs "Open"
+   - Display limit price and current market price for open orders
+   - Example:
+     ```
+     📊 Run Summary:
+       Orders Placed: 3
+       Orders Filled: 2
+       Orders Open: 1 (LIMIT order waiting for price)
+
+     📝 Open Orders:
+       - Market Token: 0x... / YES
+         Side: BUY, Limit Price: 0.35, Best Ask: 0.40
+         Status: Open (waiting for price to reach 0.35)
+     ```
+
+6. **Validation Enhancements**:
+   - Ensure price is provided for LIMIT orders (already enforced in schema)
+   - Validate price is within valid range (0 < price < 1)
+   - Add helpful error message if LIMIT order price would never fill (e.g., BUY limit below best bid)
+
+7. **Testing**:
+   - Test LIMIT order that crosses spread (immediate fill)
+   - Test LIMIT order that doesn't cross (stays open)
+   - Test BUY LIMIT above market (should fill immediately)
+   - Test BUY LIMIT below market (should stay open)
+   - Test SELL LIMIT below market (should fill immediately)
+   - Test SELL LIMIT above market (should stay open)
+   - Test position calculations with mix of filled/open orders
+
+**Success Criteria:**
+- ✅ LIMIT orders that cross spread fill immediately at best opposing price
+- ✅ LIMIT orders that don't cross create order record with `status: 'open'`
+- ✅ No execution record created for unfilled LIMIT orders
+- ✅ Run summary accurately reports filled vs open orders
+- ✅ CLI displays clear status for LIMIT orders
+- ✅ Schema validation ensures price is required for LIMIT orders
+- ✅ Position calculations exclude unfilled orders
+- ✅ All existing MARKET order tests still pass
+
+**Phase 7 Key Considerations:**
+
+**1. Order Book Crossing Logic:**
+- LIMIT orders are "maker" orders that add liquidity at specified price
+- In paper trading, we simulate immediate fill if order would cross spread
+- BUY LIMIT at $0.50 with best ask at $0.45 → fills at $0.45 (better price)
+- SELL LIMIT at $0.40 with best bid at $0.45 → fills at $0.45 (better price)
+- Orders that don't cross remain open (Phase 7 does not implement fill polling)
+
+**2. Open Order Management:**
+- Phase 7 creates open orders but does NOT implement:
+  - Order cancellation (Phase 10)
+  - Order modification (Phase 10)
+  - Periodic fill checking (Phase 8 with scheduling)
+  - Order expiration (future phase)
+- Open orders persist indefinitely until manually cancelled
+
+**3. Slippage Model:**
+- Maintain zero slippage model from Phase 5
+- LIMIT orders that cross fill at best opposing price (no worse)
+- No liquidity depth analysis or price impact simulation
+
+**4. P&L Calculation:**
+- Only filled orders contribute to positions and P&L
+- Open orders are excluded from position calculations
+- Run summary should clarify: "Realized P&L from filled orders only"
+
+**Excluded from Phase 7:**
+- Order cancellation/modification (Phase 10)
+- Automated fill checking for open orders (requires Phase 8 scheduling)
+- Order expiration/time-in-force (future phase)
+- Partial fills (all-or-nothing in Phase 7)
+- Price guards or sanity checks beyond schema validation
+- Live trading LIMIT orders (Phase 9)
+
+**Test Scenarios:**
+
+1. **LIMIT Buy Above Market** (Immediate Fill)
+   ```json
+   {
+     "planId": "limit-test-001",
+     "mode": "paper",
+     "trades": [{
+       "marketTokenId": "0x...",
+       "outcome": "YES",
+       "side": "BUY",
+       "orderType": "LIMIT",
+       "size": 100,
+       "price": 0.60
+     }]
+   }
+   ```
+   Expected: If best ask is 0.55, order fills immediately at 0.55
+
+2. **LIMIT Buy Below Market** (Stays Open)
+   ```json
+   {
+     "planId": "limit-test-002",
+     "mode": "paper",
+     "trades": [{
+       "marketTokenId": "0x...",
+       "outcome": "YES",
+       "side": "BUY",
+       "orderType": "LIMIT",
+       "size": 100,
+       "price": 0.40
+     }]
+   }
+   ```
+   Expected: If best ask is 0.55, order stays open (no fill)
+
+3. **Mixed Order Types**
+   ```json
+   {
+     "planId": "limit-test-003",
+     "mode": "paper",
+     "trades": [
+       {
+         "marketTokenId": "0x...",
+         "outcome": "YES",
+         "side": "BUY",
+         "orderType": "MARKET",
+         "size": 100
+       },
+       {
+         "marketTokenId": "0x...",
+         "outcome": "YES",
+         "side": "SELL",
+         "orderType": "LIMIT",
+         "size": 50,
+         "price": 0.70
+       }
+     ]
+   }
+   ```
+   Expected: MARKET fills immediately, LIMIT stays open if price not met
+
+**Estimated Effort**: 4-6 hours
+
+**Breakdown:**
+- LIMIT fill simulation logic: 1.5 hours
+- Database transaction updates: 1 hour
+- CLI output enhancements: 1 hour
+- Testing (6 test scenarios): 1.5 hours
+- Documentation updates: 0.5 hours
+
+**Post-Phase 7 State:**
+- LIMIT orders can be placed and will fill if price crosses spread
+- Open LIMIT orders tracked in database but not actively managed
+- User can see open orders in run summary
+- Position calculations correctly exclude unfilled orders
+- Foundation ready for Phase 8 (scheduling) to add periodic fill checks
+
+---
+
 ## Paper Trading MVP — Complete
 
 After Phase 6, you will have:

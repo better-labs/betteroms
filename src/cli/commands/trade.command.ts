@@ -9,14 +9,14 @@ import {
 import { validateTradePlan } from '../../domain/validators/trade-plan.validator.js';
 import { ValidationError } from '../../domain/errors/validation.error.js';
 import { ExecutionError } from '../../domain/errors/execution.error.js';
-import { getExecutorService } from '../../features/executor/executor.service.js';
+import { getTradeRunnerService } from '../../features/trade-runner/trade-runner.service.js';
 
 const commandLogger = logger.child({ module: 'trade-command' });
 
 /**
  * Execute trade plan command handler
  *
- * Phase 5: Validates and executes trade plans
+ * Phase 6: Validates and executes trade plans with full orchestration
  *
  * @param filePath - Optional path to trade plan JSON file
  */
@@ -44,37 +44,63 @@ export async function executeTradePlan(filePath?: string): Promise<void> {
     printTradePlanSummary(tradePlan);
     console.log('');
 
-    // Step 5: Execute trades (Phase 5)
+    // Step 5: Execute trades (Phase 6 - with orchestration)
     console.log('🚀 Executing trades...');
     console.log('');
 
-    const executorService = getExecutorService();
-    const results = await executorService.executeTradePlan(tradePlan);
+    const tradeRunnerService = getTradeRunnerService();
+    const runSummary = await tradeRunnerService.executeTradePlan(tradePlan);
 
-    // Step 6: Display execution results
+    // Step 6: Display run summary
     console.log('');
-    console.log(formatSuccess(`✓ All trades executed successfully (${results.length}/${tradePlan.trades.length})`));
+    console.log(formatSuccess(`✓ Trade Plan '${runSummary.planId}' executed successfully`));
     console.log('');
-    console.log('📊 Execution Summary:');
+    console.log('📊 Run Summary:');
+    console.log('');
+    console.log(`  Plan ID: ${runSummary.planId}`);
+    console.log(`  Mode: ${runSummary.mode}`);
+    console.log(`  Orders Placed: ${runSummary.ordersPlaced}`);
+    console.log(`  Orders Filled: ${runSummary.ordersFilled}`);
+    if (runSummary.ordersPartiallyFilled > 0) {
+      console.log(`  Orders Partially Filled: ${runSummary.ordersPartiallyFilled}`);
+    }
+    if (runSummary.ordersFailed > 0) {
+      console.log(`  Orders Failed: ${runSummary.ordersFailed}`);
+    }
+    console.log(`  Total P&L: ${runSummary.totalPnL >= 0 ? '+' : ''}$${runSummary.totalPnL.toFixed(2)}`);
+    console.log(`  Duration: ${runSummary.durationMs}ms`);
     console.log('');
 
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-      const trade = result.trade;
+    if (runSummary.positions.length > 0) {
+      console.log('📈 Positions:');
+      console.log('');
+      for (const position of runSummary.positions) {
+        console.log(`  Market Token: ${position.marketTokenId}`);
+        console.log(`  Outcome: ${position.outcome}`);
+        console.log(`  Net Quantity: ${position.netQuantity.toFixed(2)} tokens`);
+        console.log(`  Avg Price: ${position.avgPrice.toFixed(4)}`);
+        console.log(`  Total Cost: $${position.totalCost.toFixed(2)}`);
+        console.log(`  Realized P&L: ${position.realizedPnL >= 0 ? '+' : ''}$${position.realizedPnL.toFixed(2)}`);
+        console.log('');
+      }
+    }
 
-      console.log(`Trade ${i + 1}:`);
-      console.log(`  Market Token: ${trade.marketTokenId}`);
-      console.log(`  ${trade.side} ${trade.outcome} @ ${trade.orderType}`);
-      console.log(`  Size: $${trade.size} USDC`);
-      console.log(`  Fill Price: ${result.fillPrice.toFixed(4)}`);
-      console.log(`  Quantity: ${result.quantity.toFixed(2)} tokens`);
-      console.log(`  Order ID: ${result.orderId}`);
-      console.log(`  Status: ${result.status}`);
+    if (runSummary.errors && runSummary.errors.length > 0) {
+      console.log('⚠️  Errors:');
+      console.log('');
+      for (const error of runSummary.errors) {
+        console.log(`  - ${error}`);
+      }
       console.log('');
     }
 
     commandLogger.info(
-      { planId: tradePlan.planId, executedTrades: results.length },
+      {
+        planId: tradePlan.planId,
+        ordersPlaced: runSummary.ordersPlaced,
+        ordersFilled: runSummary.ordersFilled,
+        totalPnL: runSummary.totalPnL,
+      },
       'Command completed successfully'
     );
 

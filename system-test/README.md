@@ -2,9 +2,26 @@
 
 This directory contains end-to-end system tests for BetterOMS Phase 5 (Paper Trading Engine).
 
-## Phase 5 Implementation Status
+## Phase 6 Implementation Status
 
-### ✅ Completed Components
+### ✅ Phase 6 Completed Components
+
+1. **Trade Runner Service** ([trade-runner.service.ts](../src/features/trade-runner/trade-runner.service.ts))
+   - ✅ Idempotency checks (prevents duplicate planId execution)
+   - ✅ Execution history tracking
+   - ✅ Run summary generation with P&L calculation
+   - ✅ Error handling and rollback
+
+2. **Trade Runner Repository** ([trade-runner.repository.ts](../src/features/trade-runner/trade-runner.repository.ts))
+   - ✅ Execution history CRUD operations
+   - ✅ Plan existence checks for idempotency
+   - ✅ Run completion and failure tracking
+
+3. **Enhanced Trade Plan Schema** (v0.0.7)
+   - ✅ Trade-level notes field
+   - ✅ Plan-level notes field
+
+### ✅ Phase 5 Completed Components
 
 1. **Paper Executor** ([paper-executor.ts](../src/features/executor/paper-executor.ts))
    - ✅ MARKET order fill simulation using real CLOB order book data
@@ -37,18 +54,11 @@ This directory contains end-to-end system tests for BetterOMS Phase 5 (Paper Tra
 ### ⚠️ Known Limitations (As Designed for Phase 1)
 
 1. **LIMIT Orders Not Supported**: Only MARKET orders work in Phase 1
-   - The `multi-trade.json` example includes a LIMIT order that will fail
    - Phase 7 will add LIMIT order support
 
-2. **No Phase 6 Orchestration Yet**:
-   - ❌ No idempotency check (duplicate planId prevention)
-   - ❌ No execution_history table integration
-   - ❌ No run summary generation
-   - Phase 6 will add the trade-runner service
-
-3. **Schema Mismatch**: Current schema still has `outcome` field
-   - Trade plans have `outcome` field but Phase 5 design expects marketTokenId to encode outcome
-   - This is acceptable for Phase 5 testing but should be cleaned up
+2. **Schema Design**: Current schema has explicit `outcome` field
+   - Trade plans have `outcome` field which is the intended design
+   - marketTokenId is the ERC1155 token ID for the specific outcome
 
 ## Test Market Token IDs
 
@@ -59,6 +69,137 @@ The test plans use this Polymarket market token:
 - **Outcome**: NO (as specified in test plans)
 
 ## Test Scenarios
+
+---
+
+## Phase 6 Tests: Orchestration & Idempotency
+
+### Test 6-1: First Execution (Idempotency - Success)
+
+**Purpose**: Verify that a new planId executes successfully and creates execution history
+
+**Command**:
+```bash
+pnpm run execute:trade-plan system-test/trade-plans/test-6-1-first-execution.json
+```
+
+**Expected Result**:
+- ✅ Idempotency check passes (plan does not exist)
+- ✅ Execution history record created with status: 'running'
+- ✅ Trade executes successfully
+- ✅ Run summary generated with positions and P&L
+- ✅ Execution history updated to status: 'completed'
+- ✅ Summary includes:
+  - planId, mode, ordersPlaced, ordersFilled
+  - Position details (marketTokenId, outcome, netQuantity, avgPrice)
+  - Total realized P&L
+  - Duration in milliseconds
+
+**Exit Code**: 0 (success)
+
+**Verify in Database**:
+```bash
+psql $DATABASE_URL -c "SELECT plan_id, status, started_at, completed_at FROM execution_history WHERE plan_id = 'phase6-test-001';"
+```
+
+---
+
+### Test 6-2: Duplicate PlanId (Idempotency - Rejection)
+
+**Purpose**: Verify that duplicate planId is rejected for idempotency
+
+**Prerequisites**: Run Test 6-1 first
+
+**Command**:
+```bash
+pnpm run execute:trade-plan system-test/trade-plans/test-6-2-idempotency-duplicate.json
+```
+
+**Expected Result**:
+- ❌ Idempotency check fails (plan already exists)
+- ❌ Error message: "Plan 'phase6-test-001' has already been executed. Duplicate planId rejected for idempotency."
+- ❌ No new orders created
+- ❌ Execution history NOT updated (original record remains unchanged)
+
+**Exit Code**: 1 (failure)
+
+**Verify in Database**:
+```bash
+psql $DATABASE_URL -c "SELECT COUNT(*) FROM execution_history WHERE plan_id = 'phase6-test-001';"
+# Should return 1 (only the original execution)
+```
+
+---
+
+### Test 6-3: BUY then SELL (P&L Calculation)
+
+**Purpose**: Verify position tracking and P&L calculation with BUY + SELL
+
+**Command**:
+```bash
+pnpm run execute:trade-plan system-test/trade-plans/test-6-3-buy-sell-pnl.json
+```
+
+**Expected Result**:
+- ✅ First BUY order executes ($50 USDC)
+- ✅ Second SELL order executes ($30 USDC)
+- ✅ Run summary shows:
+  - 2 orders placed, 2 orders filled
+  - Final position: net quantity = (BUY quantity - SELL quantity)
+  - Realized P&L calculated from the partial position close
+  - Position shows avgPrice and totalCost
+- ✅ Execution history persisted with summary_json
+
+**Exit Code**: 0 (success)
+
+**Example Output**:
+```
+📊 Run Summary:
+  Plan ID: phase6-test-pnl-calc
+  Mode: paper
+  Orders Placed: 2
+  Orders Filled: 2
+  Total P&L: +$X.XX  (or -$X.XX depending on price movement)
+  Duration: XXXms
+
+📈 Positions:
+  Market Token: 1848970600573335108085877783719034971837863729226932893148573876733882101789
+  Outcome: NO
+  Net Quantity: XX.XX tokens (remaining after sell)
+  Avg Price: 0.XXXX
+  Total Cost: $XX.XX
+  Realized P&L: +$X.XX
+```
+
+---
+
+### Test 6-4: Complete Close (Full Cycle)
+
+**Purpose**: Verify complete position close results in zero net quantity and full P&L realization
+
+**Command**:
+```bash
+pnpm run execute:trade-plan system-test/trade-plans/test-6-4-complete-close.json
+```
+
+**Expected Result**:
+- ✅ BUY order executes ($20 USDC)
+- ✅ SELL order executes (same $20 USDC worth)
+- ✅ Run summary shows:
+  - Net quantity ≈ 0 (or very close due to price differences)
+  - Full P&L realized (all position closed)
+  - avgPrice reflects the weighted average entry price
+
+**Exit Code**: 0 (success)
+
+**Database Verification**:
+```bash
+psql $DATABASE_URL -c "SELECT plan_id, status, summary_json->>'totalPnL' as total_pnl FROM execution_history WHERE plan_id = 'phase6-test-full-cycle';"
+```
+
+---
+
+## Phase 5 Tests: Trade Execution
 
 ### Test 1: Simple BUY Order (Basic Execution)
 
@@ -240,13 +381,22 @@ psql $DATABASE_URL -c "SELECT * FROM executions ORDER BY executed_at DESC LIMIT 
 - Use `orderType: "MARKET"` for now
 - Phase 7 will add LIMIT support
 
-## Next Steps (Phase 6)
+## Phase 6 Complete!
 
-Phase 6 will add:
+Phase 6 has been fully implemented:
 - ✅ Trade runner orchestration service
 - ✅ Idempotency checks (duplicate planId prevention)
 - ✅ Run summary generation and persistence
 - ✅ execution_history table integration
 - ✅ Complete end-to-end testing
+- ✅ Position and P&L calculation across trades
 
-After Phase 6, re-running the same `planId` should fail with "Plan already executed" error.
+Re-running the same `planId` will now fail with "Plan already executed" error (see Test 6-2).
+
+## Next Steps (Phase 7+)
+
+Future phases will add:
+- **Phase 7**: LIMIT order support with order book crossing logic
+- **Phase 8**: Automated scheduling (hourly cron via Vercel)
+- **Phase 9**: Live trading mode with wallet integration
+- **Phase 10**: Order cancellation and modification

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.6.schema.json",
+  "planId": "test-4-invalid-market-001",
+  "mode": "paper",
+  "notes": "Phase 5 Test: Invalid marketTokenId - should fail with API error",
+  "trades": [
+    {
+      "marketTokenId": "99999999999999999999999999999999999999999999999999999999999999999999999999999",
+      "outcome": "YES",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 10
+    }
+  ]
+}

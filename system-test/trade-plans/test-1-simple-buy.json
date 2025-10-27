@@ -1,15 +1,15 @@
 {
   "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.6.schema.json",
-  "planId": "simple-buy-001",
+  "planId": "test-1-simple-buy-001",
   "mode": "paper",
-  "notes": "Simple SELL order test (requires existing position)",
+  "notes": "Phase 5 Test: Simple MARKET BUY order to verify basic execution flow",
   "trades": [
     {
       "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
       "outcome": "NO",
-      "side": "SELL",
+      "side": "BUY",
       "orderType": "MARKET",
-      "size": 1
+      "size": 10
     }
   ]
 }
