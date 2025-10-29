@@ -1,0 +1,17 @@
+{
+  "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.7.schema.json",
+  "planId": "test-7-6-limit-buy-crosses-spread",
+  "mode": "paper",
+  "notes": "Phase 7 Test 6: LIMIT BUY order with price that should cross spread based on current market (0.99 best ask)",
+  "trades": [
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "YES",
+      "side": "BUY",
+      "orderType": "LIMIT",
+      "size": 100,
+      "price": 0.999,
+      "notes": "Limit price (0.999) is >= best ask (0.99), should fill immediately at 0.99"
+    }
+  ]
+}

@@ -25,14 +25,17 @@ program
   .command('execute:trade-plan')
   .description('Execute a trade plan in paper or live mode')
   .argument('[file-path]', 'Path to JSON trade plan file (optional if using stdin)')
-  .action(async (filePath?: string) => {
-    await executeTradePlan(filePath);
+  .option('-r, --reexecute', 'Skip idempotency check and allow re-execution of same planId')
+  .action(async (filePath?: string, options?: { reexecute?: boolean }) => {
+    await executeTradePlan(filePath, options?.reexecute);
   })
   .addHelpText(
     'after',
     `
 Examples:
   $ pnpm run execute:trade-plan ./test/trade-plans/simple-buy.json
+  $ pnpm run execute:trade-plan ./test/trade-plans/simple-buy.json --reexecute
+  $ pnpm run execute:trade-plan ./test/trade-plans/simple-buy.json -r
   $ cat ./test/trade-plans/simple-buy.json | pnpm run execute:trade-plan
   $ pnpm run execute:trade-plan <<EOF
   {
@@ -49,6 +52,10 @@ Examples:
     ]
   }
   EOF
+
+Options:
+  -r, --reexecute    Skip idempotency check and allow re-execution of same planId
+                     Useful for testing and re-running the same trade plan multiple times
 
 Input Methods:
   1. File path: Provide path to JSON file as argument

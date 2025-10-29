@@ -1,0 +1,17 @@
+{
+  "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.7.schema.json",
+  "planId": "test-7-2-limit-buy-below-market",
+  "mode": "paper",
+  "notes": "Phase 7 Test 2: LIMIT BUY order with price below best ask - should stay open",
+  "trades": [
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "YES",
+      "side": "BUY",
+      "orderType": "LIMIT",
+      "size": 100,
+      "price": 0.01,
+      "notes": "Low limit price (0.01) should not cross spread - order stays open"
+    }
+  ]
+}

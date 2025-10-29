@@ -26,29 +26,44 @@ export class TradeRunnerService {
    * Execute a trade plan with full orchestration
    *
    * @param plan - Trade plan to execute
+   * @param skipIdempotencyCheck - If true, skip idempotency check (for testing/re-execution)
    * @returns Run summary with positions and P&L
    */
-  async executeTradePlan(plan: TradePlan): Promise<RunSummary> {
+  async executeTradePlan(plan: TradePlan, skipIdempotencyCheck = false): Promise<RunSummary> {
     const startedAt = new Date();
 
     runnerLogger.info(
-      { planId: plan.planId, mode: plan.mode, tradeCount: plan.trades.length },
+      { planId: plan.planId, mode: plan.mode, tradeCount: plan.trades.length, skipIdempotencyCheck },
       'Starting trade plan execution'
     );
 
-    // Step 1: Idempotency check
-    const planExists = await this.repository.checkPlanExists(plan.planId);
-    if (planExists) {
-      const message = `Plan '${plan.planId}' has already been executed. Duplicate planId rejected for idempotency.`;
-      runnerLogger.warn({ planId: plan.planId }, message);
-      throw new ExecutionError(message, {
-        details: { planId: plan.planId, reason: 'duplicate_plan_id' },
-      });
+    // Step 1: Idempotency check (unless skipped)
+    // When re-executing, generate a unique execution ID to avoid conflicts
+    let executionPlanId = plan.planId;
+
+    if (!skipIdempotencyCheck) {
+      const planExists = await this.repository.checkPlanExists(plan.planId);
+      if (planExists) {
+        const message = `Plan '${plan.planId}' has already been executed. Duplicate planId rejected for idempotency.`;
+        runnerLogger.warn({ planId: plan.planId }, message);
+        throw new ExecutionError(message, {
+          details: { planId: plan.planId, reason: 'duplicate_plan_id' },
+        });
+      }
+    } else {
+      // Re-execution mode: append timestamp to planId for execution history uniqueness
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      executionPlanId = `${plan.planId}-reexec-${timestamp}`;
+
+      runnerLogger.info(
+        { planId: plan.planId, executionPlanId },
+        'Idempotency check skipped (re-execution mode) - using unique execution ID'
+      );
     }
 
     // Step 2: Create execution history record (status: running)
     await this.repository.createExecutionHistory({
-      planId: plan.planId,
+      planId: executionPlanId,
       planJson: plan,
       status: 'running',
       startedAt,
@@ -74,7 +89,7 @@ export class TradeRunnerService {
 
       // Step 5: Update execution history (status: completed)
       await this.repository.completeExecutionHistory(
-        plan.planId,
+        executionPlanId,
         summary,
         'completed'
       );
@@ -82,8 +97,10 @@ export class TradeRunnerService {
       runnerLogger.info(
         {
           planId: plan.planId,
+          executionPlanId,
           ordersPlaced: summary.ordersPlaced,
           ordersFilled: summary.ordersFilled,
+          ordersOpen: summary.ordersOpen,
           totalPnL: summary.totalPnL,
           durationMs: summary.durationMs,
         },
@@ -97,11 +114,11 @@ export class TradeRunnerService {
         error instanceof Error ? error.message : String(error);
 
       runnerLogger.error(
-        { planId: plan.planId, error: errorMessage },
+        { planId: plan.planId, executionPlanId, error: errorMessage },
         'Trade plan execution failed'
       );
 
-      await this.repository.failExecutionHistory(plan.planId, errorMessage);
+      await this.repository.failExecutionHistory(executionPlanId, errorMessage);
 
       // Re-throw error for caller to handle
       throw error;
@@ -125,6 +142,7 @@ export class TradeRunnerService {
 
     // Count order statuses
     const ordersFilled = orders.filter((o) => o.status === 'filled').length;
+    const ordersOpen = orders.filter((o) => o.status === 'open').length;
     const ordersPartiallyFilled = orders.filter(
       (o) => o.status === 'partially_filled'
     ).length;
@@ -166,6 +184,7 @@ export class TradeRunnerService {
       mode: plan.mode,
       ordersPlaced: orders.length,
       ordersFilled,
+      ordersOpen,
       ordersPartiallyFilled,
       ordersFailed,
       totalPnL,
@@ -180,6 +199,7 @@ export class TradeRunnerService {
         planId: plan.planId,
         ordersPlaced: summary.ordersPlaced,
         ordersFilled: summary.ordersFilled,
+        ordersOpen: summary.ordersOpen,
         positionCount: positions.length,
         totalPnL: summary.totalPnL,
       },

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.7.schema.json",
+  "planId": "test-7-5-mixed-order-types",
+  "mode": "paper",
+  "notes": "Phase 7 Test 5: Mix of MARKET and LIMIT orders to test combined behavior",
+  "trades": [
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "NO",
+      "side": "BUY",
+      "orderType": "MARKET",
+      "size": 100,
+      "notes": "MARKET BUY - should fill immediately"
+    },
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "NO",
+      "side": "SELL",
+      "orderType": "LIMIT",
+      "size": 50,
+      "price": 0.99,
+      "notes": "LIMIT SELL above market - should stay open"
+    },
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "YES",
+      "side": "BUY",
+      "orderType": "LIMIT",
+      "size": 75,
+      "price": 0.60,
+      "notes": "LIMIT BUY - may fill if price is good, otherwise stays open"
+    }
+  ]
+}

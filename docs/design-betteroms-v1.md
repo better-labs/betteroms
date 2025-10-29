@@ -248,47 +248,6 @@ package.json                   // scripts: betteroms, build, dev, db:*
 - `clob-client.ts`: Initialize and export configured `ClobClient` instance
 - `adapter.ts`: Domain-specific methods (e.g., `getMarketOrderBook()`, `simulateFill()`) that call CLOB client
 
-**Example structure:**
-```typescript
-// clob-client.ts
-import { ClobClient } from '@polymarket/clob-client';
-export const clobClient = new ClobClient(host, chainId);
-
-// adapter.ts
-export class PolymarketAdapter {
-  async getOrderBookSnapshot(marketId: string) {
-    return await clobClient.getOrderBook(marketId);
-  }
-
-  async getBestPrices(marketId: string) {
-    const [orderBook, midPoint] = await Promise.all([
-      clobClient.getOrderBook(marketId),
-      clobClient.getMidPoint(marketId)
-    ]);
-    return { bestBid: orderBook.bids[0], bestAsk: orderBook.asks[0], midPoint };
-  }
-}
-```
-
-### Phase-Specific Usage:
-
-**Phase 1 (Paper Trading)**:
-- `getOrderBook()` - fetch order book for fill simulation
-- `getLastTradePrice()` - get recent execution prices
-- `getMidPoint()` / `getSpread()` - calculate fill prices for MARKET orders
-- No authentication required (read-only public endpoints)
-
-**Phase 2 (Advanced Paper Trading)**:
-- `getPricesHistory()` - historical data for backtesting
-- `getMarketTradesEvents()` - market activity analysis
-
-**Phase 3 (Live Trading)**:
-- `createOrDeriveApiKey()` - credential generation (replaces custom `generate-creds` logic)
-- `createAndPostOrder()` - place orders with price/size
-- `createAndPostMarketOrder()` - immediate market orders
-- `cancelOrder()` / `cancelAll()` - order cancellation
-- `getOpenOrders()` - position reconciliation
-- `getTrades()` - execution history sync
 
 ### Dependencies:
 ```json
@@ -696,7 +655,7 @@ export class PolymarketAdapter {
 
 ---
 
-## Phase 6 — Orchestration & End-to-End Integration
+## Phase 6 — Orchestration & End-to-End Integration ✅ COMPLETE
 
 **Goal**: Complete the system with idempotency, run summaries, and proper error handling
 
@@ -1032,7 +991,144 @@ Expected result:
 - Open LIMIT orders tracked in database but not actively managed
 - User can see open orders in run summary
 - Position calculations correctly exclude unfilled orders
-- Foundation ready for Phase 8 (scheduling) to add periodic fill checks
+- Foundation ready for Phase 9 (scheduling) to add periodic fill checks
+
+---
+
+## Phase 8 — Demo Script & Documentation
+
+**Goal**: Create a minimal demo script that showcases BetterOMS core features for new users
+
+**Why this phase?** Provides an easy entry point for users to understand the system's capabilities without reading extensive documentation.
+
+**Prerequisites**: Phase 6 complete (paper trading MVP working)
+
+**Deliverables:**
+
+1. **Demo Script** (`/demo/betteroms-demo.sh`):
+   - Automated walkthrough of core BetterOMS features
+   - Self-contained with sample trade plans
+   - Clear console output explaining each step
+   - Demonstrates: paper trading, MARKET orders, position tracking, idempotency
+
+2. **Sample Trade Plans** (`/demo/trade-plans/`):
+   - `demo-01-simple-buy.json` - Single MARKET BUY
+   - `demo-02-buy-sell.json` - BUY followed by SELL
+   - `demo-03-duplicate.json` - Duplicate planId (demonstrates idempotency)
+
+3. **README.md Demo Section**:
+   - Add "## Quick Demo" section to main README
+   - Step-by-step instructions to run the demo
+   - Expected output examples
+   - Links to demo trade plans
+
+4. **Demo Features**:
+   - Clear section headers for each demo step
+   - Colored output for readability (using CLI colors)
+   - Pause points for user to observe results
+   - Database state queries to show persistence
+   - Summary at end showing total P&L across all demo trades
+
+5. **Documentation Updates**:
+   - Update README with "## Quick Demo" section (before "## Phase 1 Setup")
+   - Include demo prerequisites (pnpm install, database setup)
+   - Link to design doc for detailed architecture
+
+**Demo Script Flow**:
+```bash
+#!/bin/bash
+# BetterOMS Demo - Paper Trading Walkthrough
+
+echo "=== BetterOMS Demo: Paper Trading Walkthrough ==="
+echo ""
+echo "This demo will:"
+echo "1. Execute a simple MARKET BUY order"
+echo "2. Execute BUY then SELL to show position management"
+echo "3. Attempt duplicate execution (idempotency check)"
+echo "4. Display final positions and P&L"
+echo ""
+
+# Step 1: Simple BUY
+echo "Step 1: Executing simple MARKET BUY order..."
+pnpm run execute:trade-plan ./demo/trade-plans/demo-01-simple-buy.json
+
+# Step 2: BUY and SELL
+echo "Step 2: Executing BUY followed by SELL..."
+pnpm run execute:trade-plan ./demo/trade-plans/demo-02-buy-sell.json
+
+# Step 3: Duplicate (should fail)
+echo "Step 3: Attempting duplicate execution (should fail)..."
+pnpm run execute:trade-plan ./demo/trade-plans/demo-03-duplicate.json || echo "✓ Duplicate rejected as expected"
+
+# Step 4: Summary
+echo "Step 4: Demo complete! Check database for execution history."
+```
+
+**README.md Demo Section Content**:
+```markdown
+## Quick Demo
+
+Experience BetterOMS paper trading in under 5 minutes:
+
+### Prerequisites
+- Completed Phase 2 setup (database configured)
+- Sample token IDs in demo plans point to active Polymarket markets
+
+### Run the Demo
+
+```bash
+# Run automated demo script
+./demo/betteroms-demo.sh
+
+# Or run individual demo steps manually:
+pnpm run execute:trade-plan ./demo/trade-plans/demo-01-simple-buy.json
+pnpm run execute:trade-plan ./demo/trade-plans/demo-02-buy-sell.json
+pnpm run execute:trade-plan ./demo/trade-plans/demo-03-duplicate.json
+```
+
+### What the Demo Shows
+
+1. **Simple MARKET BUY**: Places a single buy order and shows simulated fill
+2. **Position Management**: Demonstrates buying then selling a position
+3. **Idempotency**: Attempts duplicate execution and shows rejection
+4. **Persistence**: All trades stored in database with complete audit trail
+
+### Demo Output
+
+You'll see structured output showing:
+- Trade plan summary
+- Simulated order fills with prices from live order book
+- Position updates and P&L calculations
+- Idempotency protection in action
+
+### Next Steps
+
+After the demo, explore:
+- Create your own trade plans in `/examples`
+- Review execution history in Drizzle Studio: `pnpm db:studio`
+- Read full documentation in `/docs/design-betteroms-v1.md`
+```
+
+**Success Criteria:**
+- ✅ Demo script runs end-to-end without manual intervention
+- ✅ All demo trade plans use valid, active Polymarket token IDs
+- ✅ Demo output is clear and educational
+- ✅ README Quick Demo section is comprehensive
+- ✅ Demo showcases all Phase 6 MVP features
+- ✅ New users can run demo immediately after Phase 2 setup
+
+**Excluded from Phase 8:**
+- LIMIT order demos (requires Phase 7)
+- Live trading demos (requires Phase 9)
+- Advanced features (risk checks, cancellation, etc.)
+
+**Estimated Effort**: 2-3 hours
+
+**Breakdown:**
+- Demo script creation: 1 hour
+- Sample trade plans with valid token IDs: 0.5 hours
+- README demo section: 0.5 hours
+- Testing and refinement: 1 hour
 
 ---
 
@@ -1051,11 +1147,11 @@ After Phase 6, you will have:
 **Total Estimated Effort**: 19-29 hours (2.5-4 days of focused work)
 
 **Next Steps** (Future Phases):
-- **Phase 7**: LIMIT order support with order book crossing logic
-- **Phase 8**: Automated scheduling (hourly cron via Vercel)
-- **Phase 9**: Live trading mode with wallet integration
-- **Phase 10**: Order cancellation and modification
-- **Phase 11**: Risk checks, price guards, position limits
+- **Phase 8**: Demo script and documentation
+- **Phase 9**: Automated scheduling (hourly cron via Vercel)
+- **Phase 10**: Live trading mode with wallet integration
+- **Phase 11**: Order cancellation and modification
+- **Phase 12**: Risk checks, price guards, position limits
 
 ---
 
@@ -1148,15 +1244,31 @@ A: **Phase 1 accepts token ID format only.**
 
 ### Position Sizing
 **Q: Should orders be sized in USDC collateral or outcome token quantities?**
-A: **Paper trading: Use USDC collateral sizing for both BUY and SELL orders.**
-- `size: 500` means **$500 USDC worth** for both BUY and SELL orders
-- **BUY example**: `size: 500` at price 0.40 → buy $500 / 0.40 = 1250 tokens
-- **SELL example**: `size: 500` at price 0.60 → sell $500 / 0.60 = 833 tokens (must have existing position)
-- Rationale: Simpler for users ("I want to buy $500 of YES" or "I want to sell $300 worth") and matches Polymarket API flexibility
+A: **Default: Token-quantity sizing. Optional: USDC-value sizing.**
 
-**Phase 2+**: Add support for:
-- Token-quantity sizing (e.g., "buy 1000 shares")
-- Both sizing modes for BUY and SELL orders
+**Token Quantity Sizing (Default)**:
+- `size: 500` means **500 tokens** (outcome shares)
+- **BUY example**: `size: 500` → buy 500 tokens at best ask price (costs 500 × price USDC)
+- **SELL example**: `size: 500` → sell 500 tokens at best bid price (receives 500 × price USDC)
+- **Rationale**:
+  - More intuitive for users ("sell half my position" = specify exact token count)
+  - Avoids confusion with wide bid-ask spreads where USDC sizing can be misleading
+  - Directly maps to position quantities shown in UI
+  - Matches traditional stock trading UX (shares, not dollar amounts)
+  - Learned from Phase 6 testing: USDC sizing for SELL orders is confusing when spreads are wide
+
+**USDC Value Sizing (Optional - Phase 8+)**:
+- Add optional `sizeMode: "usdc"` field to trade schema
+- When `sizeMode: "usdc"`, interpret `size` as USD value instead of token quantity
+- **BUY example**: `size: 500, sizeMode: "usdc"` at price 0.40 → buy $500 / 0.40 = 1250 tokens
+- **SELL example**: `size: 500, sizeMode: "usdc"` at price 0.60 → sell $500 / 0.60 = 833 tokens (must have position)
+- **Use case**: "I want to allocate $500 to this trade" regardless of final token count
+- **Default**: `sizeMode: "tokens"` (if field omitted)
+
+**Migration from Phase 1-6**:
+- Current implementation uses USDC sizing (Phase 1-6 behavior)
+- Phase 7+ will flip default to token quantity sizing
+- Existing test files and documentation will be updated
 - Helper utilities to convert between USDC ↔ token quantities
 
 ### Slippage Model
@@ -1361,17 +1473,25 @@ const fillPrice = side === 'BUY'
 
 **SELL order validation**:
 - Query executions table for existing position for the marketTokenId
-- Error if no position exists (Phase 1 does not support short positions)
+- Calculate net position: `SUM(quantity WHERE side='BUY') - SUM(quantity WHERE side='SELL')`
+- Error if no position exists or position quantity < order quantity
+- Phase 1 does not support short positions (cannot sell more than owned)
 
 **Slippage model (Phase 1)**:
 - Zero slippage - orders fill at exact best opposing price
 - No price impact simulation or liquidity depth analysis
 - Deterministic fills for testing/benchmarking
 
-**Sizing**:
-- Both BUY and SELL orders sized in USDC collateral
-- Example: `size: 500` = $500 USDC worth of tokens
-- Conversion: `tokens = size / price`
+**Sizing (Phase 1-6: USDC mode, Phase 7+: Token mode)**:
+- **Phase 1-6**: USDC collateral sizing (legacy)
+  - Example: `size: 500` = $500 USDC worth of tokens
+  - Conversion: `tokens = size / price`
+  - **Issue**: Wide spreads make SELL sizing confusing (discovered in Phase 6 testing)
+- **Phase 7+**: Token quantity sizing (new default)
+  - Example: `size: 500` = 500 outcome tokens
+  - BUY: Purchase 500 tokens at best ask, cost = 500 × ask_price USDC
+  - SELL: Sell 500 tokens at best bid, receive = 500 × bid_price USDC
+  - Validation: SELL requires user owns ≥ 500 tokens for this market+outcome
 
 **Persistence**:
 - Record simulated executions to `executions` table

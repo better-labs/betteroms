@@ -24,6 +24,7 @@ export interface RunSummary {
   mode: 'paper' | 'live';
   ordersPlaced: number;
   ordersFilled: number;
+  ordersOpen: number; // LIMIT orders waiting for price (Phase 7)
   ordersPartiallyFilled: number;
   ordersFailed: number;
   totalPnL: number; // Total realized P&L across all trades

@@ -1,8 +1,8 @@
 {
   "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.6.schema.json",
-  "planId": "test-2-buy-then-sell-001",
+  "planId": "test-2-buy-then-sell-v2-001",
   "mode": "paper",
-  "notes": "Phase 5 Test: BUY followed by SELL to verify position tracking and validation",
+  "notes": "Phase 6 Test: BUY followed by SELL (adjusted for market spread) to verify position tracking",
   "trades": [
     {
       "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
