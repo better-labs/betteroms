@@ -10,6 +10,7 @@ import { validateTradePlan } from '../../domain/validators/trade-plan.validator.
 import { ValidationError } from '../../domain/errors/validation.error.js';
 import { ExecutionError } from '../../domain/errors/execution.error.js';
 import { getTradeRunnerService } from '../../features/trade-runner/trade-runner.service.js';
+import { getExecutorRepository } from '../../features/executor/executor.repository.js';
 
 const commandLogger = logger.child({ module: 'trade-command' });
 
@@ -19,8 +20,9 @@ const commandLogger = logger.child({ module: 'trade-command' });
  * Phase 6: Validates and executes trade plans with full orchestration
  *
  * @param filePath - Optional path to trade plan JSON file
+ * @param reexecute - If true, skip idempotency check and allow re-execution
  */
-export async function executeTradePlan(filePath?: string): Promise<void> {
+export async function executeTradePlan(filePath?: string, reexecute?: boolean): Promise<void> {
   try {
     commandLogger.info({ filePath }, 'Starting trade plan execution');
 
@@ -46,10 +48,13 @@ export async function executeTradePlan(filePath?: string): Promise<void> {
 
     // Step 5: Execute trades (Phase 6 - with orchestration)
     console.log('🚀 Executing trades...');
+    if (reexecute) {
+      console.log('⚠️  Re-execution mode: Skipping idempotency check');
+    }
     console.log('');
 
     const tradeRunnerService = getTradeRunnerService();
-    const runSummary = await tradeRunnerService.executeTradePlan(tradePlan);
+    const runSummary = await tradeRunnerService.executeTradePlan(tradePlan, reexecute);
 
     // Step 6: Display run summary
     console.log('');
@@ -61,6 +66,9 @@ export async function executeTradePlan(filePath?: string): Promise<void> {
     console.log(`  Mode: ${runSummary.mode}`);
     console.log(`  Orders Placed: ${runSummary.ordersPlaced}`);
     console.log(`  Orders Filled: ${runSummary.ordersFilled}`);
+    if (runSummary.ordersOpen > 0) {
+      console.log(`  Orders Open: ${runSummary.ordersOpen} (LIMIT orders waiting for price)`);
+    }
     if (runSummary.ordersPartiallyFilled > 0) {
       console.log(`  Orders Partially Filled: ${runSummary.ordersPartiallyFilled}`);
     }
@@ -70,6 +78,30 @@ export async function executeTradePlan(filePath?: string): Promise<void> {
     console.log(`  Total P&L: ${runSummary.totalPnL >= 0 ? '+' : ''}$${runSummary.totalPnL.toFixed(2)}`);
     console.log(`  Duration: ${runSummary.durationMs}ms`);
     console.log('');
+
+    // Display open orders if any
+    if (runSummary.ordersOpen > 0) {
+      const executorRepository = getExecutorRepository();
+      const allOrders = await executorRepository.getOrdersByPlanId(runSummary.planId);
+      const openOrders = allOrders.filter((o) => o.status === 'open');
+
+      if (openOrders.length > 0) {
+        console.log('📝 Open Orders:');
+        console.log('');
+        for (const order of openOrders) {
+          console.log(`  Market Token: ${order.marketTokenId}`);
+          console.log(`  Outcome: ${order.outcome}`);
+          console.log(`  Side: ${order.side}`);
+          console.log(`  Order Type: ${order.orderType}`);
+          console.log(`  Size: $${parseFloat(order.size).toFixed(2)} USDC`);
+          if (order.price) {
+            console.log(`  Limit Price: ${parseFloat(order.price).toFixed(4)}`);
+          }
+          console.log(`  Status: Open (waiting for price)`);
+          console.log('');
+        }
+      }
+    }
 
     if (runSummary.positions.length > 0) {
       console.log('📈 Positions:');

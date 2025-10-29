@@ -1,0 +1,17 @@
+{
+  "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.7.schema.json",
+  "planId": "test-7-3-limit-sell-below-market",
+  "mode": "paper",
+  "notes": "Phase 7 Test 3: LIMIT SELL order with price below best bid - should fill immediately (requires existing position from test-7-1)",
+  "trades": [
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "YES",
+      "side": "SELL",
+      "orderType": "LIMIT",
+      "size": 50,
+      "price": 0.01,
+      "notes": "Low limit price (0.01) should cross spread and fill at best bid - requires running test-7-1 first"
+    }
+  ]
+}

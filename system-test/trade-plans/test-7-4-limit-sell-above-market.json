@@ -1,0 +1,17 @@
+{
+  "$schema": "https://github.com/better-labs/betteroms/blob/main/docs/schemas/trade-plan-v0.0.7.schema.json",
+  "planId": "test-7-4-limit-sell-above-market",
+  "mode": "paper",
+  "notes": "Phase 7 Test 4: LIMIT SELL order with price above best bid - should stay open (requires existing position)",
+  "trades": [
+    {
+      "marketTokenId": "1848970600573335108085877783719034971837863729226932893148573876733882101789",
+      "outcome": "YES",
+      "side": "SELL",
+      "orderType": "LIMIT",
+      "size": 25,
+      "price": 0.99,
+      "notes": "High limit price (0.99) should not cross spread - order stays open"
+    }
+  ]
+}

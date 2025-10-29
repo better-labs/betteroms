@@ -6,9 +6,9 @@ import type { Trade } from '../../domain/schemas/trade-plan.schema.js';
 export interface ExecutionResult {
   orderId: string;
   trade: Trade;
-  fillPrice: number;
-  quantity: number;
-  status: 'filled' | 'failed';
+  fillPrice?: number; // Undefined for open LIMIT orders
+  quantity?: number; // Undefined for open LIMIT orders
+  status: 'filled' | 'open' | 'failed';
   executedAt: Date;
   errorMessage?: string;
 }
