@@ -786,7 +786,7 @@ Expected result:
 
 ---
 
-## Phase 7 — LIMIT Order Support
+## Phase 7 — LIMIT Order Support ✅ COMPLETE
 
 **Goal**: Add LIMIT order execution with order book crossing logic and price validation
 
@@ -1132,19 +1132,21 @@ After the demo, explore:
 
 ---
 
-## Paper Trading MVP — Complete
+## Paper Trading MVP — Complete (Phase 1-7)
 
-After Phase 6, you will have:
+After Phase 7, you will have:
 - ✅ Working CLI for paper trading
 - ✅ CLOB client integration for market data
 - ✅ Database persistence for orders, executions, execution_history
 - ✅ Trade plan validation (JSON + Zod)
 - ✅ MARKET order execution (BUY/SELL)
+- ✅ LIMIT order execution with crossing logic
 - ✅ Position calculation and P&L
-- ✅ Idempotency protection
-- ✅ Run summaries and error handling
+- ✅ Idempotency protection with --reexecute flag
+- ✅ Run summaries with open order tracking
+- ✅ Error handling and rollback
 
-**Total Estimated Effort**: 19-29 hours (2.5-4 days of focused work)
+**Total Estimated Effort**: 23-35 hours (3-4.5 days of focused work)
 
 **Next Steps** (Future Phases):
 - **Phase 8**: Demo script and documentation
